@@ -1,0 +1,318 @@
+DOCUMENTATION OF THE FUNCTIONS PROVIDED
+1. create_group
+Purpose
+Creates a new group, assigns the creator as an admin and active member, and generates associated records in public.entities and public.groups.
+Schema
+groups.create_group
+Parameters
+Name	Type	Default	Description
+p_created_by	UUID	–	ID of the member creating the group (must be an existing, active member).
+p_group_name	TEXT	–	Display name of the group.
+p_group_description	TEXT	NULL	Optional description.
+p_group_visibility	TEXT	'private'	'public' or 'private'.
+p_max_capacity	NUMERIC	50	Maximum number of active members allowed.
+p_min_capacity	NUMERIC	1	Minimum number of members required (business rule).
+Returns
+JSONB
+json
+{
+  "group_id": "uuid",
+  "group_ref": "string",
+  "entity_id": "uuid",
+  "member_code": "string",
+  "status": "created"
+}
+
+USE CASE;
+sql
+SELECT groups.create_group(
+    p_created_by := '55cd84f5-e11a-4791-879a-acd502203a6a',
+    p_group_name := 'Investment Club',
+    p_group_visibility := 'public'
+);
+Notes
+•	Creator is automatically added as an admin member.
+•	Group type is no longer required .
+•	Generates unique reference codes via public.gen_ref_code.
+•	Fails if capacities are invalid (tuseme.. min_capacity > max_capacity).
+
+2. update_group
+Purpose
+Updates group metadata – name, description, visibility, cover photo, capacity limits. Only an admin or the original creator can perform the update.
+Schema
+groups.update_group
+Parameters
+All parameters are optional; only provided fields are updated.
+Name	Type	Description
+p_group_id	UUID	ID of the group to update.
+p_editor_id	UUID	public.members.id of the person requesting the update.
+p_group_name	TEXT	New group name.
+p_group_description	TEXT	New description.
+p_group_visibility	TEXT	'public' or 'private'.
+p_max_capacity	NUMERIC	New max capacity.
+p_min_capacity	NUMERIC	New min capacity.
+Returns
+JSONB – the updated group details (same structure as get_sp_group_det).
+Example
+sql
+SELECT groups.update_group(
+    p_group_id := '827ab1fc-7d8c-4598-957e-80b6cffaf595',
+    p_editor_id := '55cd84f5-e11a-4791-879a-acd502203a6a',
+    p_group_name := 'Updated Club Name',
+    p_max_capacity := 100
+);
+Notes 
+•	Permissions: editor must be an active admin or the group creator.
+•	Cannot update a deleted group.
+•	Capacity changes are validated (e.g., min_capacity ≤ max_capacity).
+•	The function returns the full group object after update.
+
+3. delete_group
+Purpose
+Soft deletes a group: sets group_status = 'deleted' and marks all active members as 'exited'. The group can still be queried but is hidden from active lists.
+Schema
+groups.delete_group
+Parameters
+Name	Type	Description
+p_group_id	UUID	ID of the group to delete.
+p_editor_id	UUID	public.members.id of the person requesting deletion.
+Returns
+JSONB
+json
+{
+  "status": "deleted",
+  "group_id": "uuid",
+  "message": "Group and its active members have been marked as deleted/exited"
+}
+Example
+sql
+SELECT groups.delete_group(
+    p_group_id := '827ab1fc-7d8c-4598-957e-80b6cffaf595',
+    p_editor_id := '55cd84f5-e11a-4791-879a-acd502203a6a'
+);
+Notes
+•	Only an admin or the original creator can delete the group.
+•	No physical data is removed – all records remain for audit trails.
+•	Once deleted, the group cannot be updated or used for new rotations (but historical data stays).
+
+4. add_member_to_group
+Purpose
+Directly adds a member to a group (bypasses the invitation workflow). Used by admins for bulk import or immediate enrolment.
+Schema
+groups.add_member_to_group
+Parameters
+Name	Type	Default	Description
+p_group_id	UUID	–	Group ID.
+p_member_id	UUID	–	Member ID (must exist and be active).
+p_role	TEXT	'member'	'admin' or 'member'.
+p_added_by	UUID	NULL	groups.group_members.id of the admin performing the addition (optional, for audit).
+Returns
+JSONB
+json
+{
+  "status": "added",
+  "member_code": "string",
+  "group_id": "uuid",
+  "member_id": "uuid"
+}
+Example
+sql
+SELECT groups.add_member_to_group(
+    p_group_id := '827ab1fc-7d8c-4598-957e-80b6cffaf595',
+    p_member_id := '05233118-e453-44b0-ae91-53885871a051',
+    p_role := 'member'
+);
+Notes
+•	If the member already exists in the group (even with status 'exited'), the function reactivates them.
+•	Capacity is checked only for new members (reactivation is always allowed).
+•	If p_added_by is provided, it must be a valid admin of the group.
+•	This function does not create an invitation record – use invite_members_to_group for standard invite accept flow.
+
+5. is_group_member
+Purpose
+Checks if a given member is an active member of a specific group.
+Schema
+groups.is_group_member
+Parameters
+Name	Type	Description
+p_group_id	UUID	Group ID.
+p_member_id	UUID	Member ID.
+Returns
+BOOLEAN – true if the member is active in the group, otherwise false.
+Example
+sql
+SELECT groups.is_group_member(
+    '827ab1fc-7d8c-4598-957e-80b6cffaf595',
+    '55cd84f5-e11a-4791-879a-acd502203a6a'
+);
+Notes
+•	Only considers members with member_status = 'active'.
+•	Does not check group existence – returns false if group does not exist.
+•	Stable, read only function.
+
+6. is_group_admin
+Purpose
+Checks if a given group member (by group_members.id) is an active admin of the group.
+Schema
+groups.is_group_admin
+Parameters
+Name	Type	Description
+p_group_member_id	UUID	The id from the groups.group_members table.
+Returns
+BOOLEAN – true if the record exists, role is 'admin', and status is 'active'. Otherwise false.
+Example
+sql
+SELECT groups.is_group_admin('ef2260b2-0727-42d8-b8aa-1cae032ddafe');
+Notes
+•	Use this after you already have a group_members.id (e.g., from a query).
+•	To check by member UUID, first retrieve the group_members.id or use is_group_member combined with role check.
+•	Stable, read only.
+
+7. get_group_members_details
+Purpose
+Returns full member details (all columns from public.members plus group specific role, status, join date) for active members of a group. Designed for admin panels or detailed member profiles.
+Schema
+groups.get_group_members_details
+Parameters
+Name	Type	Description
+p_group_id	UUID	Group ID.
+Returns
+TABLE with columns:
+Column	Type	Description
+group_member_id	UUID	ID from groups.group_members.
+member_id	UUID	public.members.id.
+first_name, last_name, other_name	TEXT	Member’s full name.
+email, primary_phone, secondary_phone	TEXT	Contact details.
+date_of_birth	TIMESTAMPTZ	Birth date.
+gender	public.gender	Enum.
+national_id	TEXT	National ID.
+verification_status	public.verification_status	e.g., 'verified'.
+cover_photo_url, display_photo_url, about	TEXT	Profile media.
+member_role	TEXT	'admin' or 'member'.
+member_status	TEXT	'active', 'suspended', etc.
+joined_at	TIMESTAMPTZ	When the member joined the group.
+Example
+sql
+SELECT * FROM groups.get_group_members_details('827ab1fc-7d8c-4598-957e-80b6cffaf595');
+Notes
+•	Filters only member_status = 'active'.
+•	Returns all active members; to get details of a single member, add a WHERE clause on member_id.
+•	Throws an error if the group does not exist or is deleted.
+8. list_group_members
+Purpose
+Simplified list of group members, intended for UI components that show member names, roles, and join dates without heavy personal information.
+Schema
+groups.list_group_members
+Parameters
+Name	Type	Description
+p_group_id	UUID	Group ID.
+Returns
+TABLE with columns:
+Column	Type	Description
+group_member_id	UUID	ID from groups.group_members.
+member_id	UUID	public.members.id.
+member_name	TEXT	Concatenated first and last name.
+member_role	TEXT	'admin' or 'member'.
+member_status	TEXT	Membership status.
+joined_at	TIMESTAMPTZ	When the member joined.
+Example
+sql
+SELECT * FROM groups.list_group_members('827ab1fc-7d8c-4598-957e-80b6cffaf595');
+Notes
+•	No sensitive fields (email, phone, etc.) are exposed.
+•	Includes all members (active, suspended, exited) – the frontend can filter by member_status.
+•	Throws an error if the group does not exist.
+
+9. get_all_member_group
+Purpose
+Returns all groups that a given member belongs to (where membership is active). Includes member count and unread notification count for that member in each group.
+Schema
+groups.get_all_member_group
+Parameters
+Name	Type	Description
+p_member_id	UUID	Member ID (from public.members).
+Returns
+TABLE with columns:
+Column	Type	Description
+group_id	UUID	Group ID.
+group_name	TEXT	Name of the group.
+group_description	TEXT	Description.
+number_of_members	BIGINT	Total active members in the group.
+group_display_photo_url	TEXT	Photo URL.
+group_status	TEXT	'active', 'dormant', 'deleted'.
+no_of_unread_notifications	BIGINT	Number of unread notifications for the member in this group (across all notification types).
+Example
+sql
+SELECT * FROM groups.get_all_member_group('55cd84f5-e11a-4791-879a-acd502203a6a');
+Notes
+•	Only groups where the member has member_status = 'active' and the group is not deleted are returned.
+•	The unread count is computed live from the groups.notifications table.
+•	Ordered by group creation date (newest first).
+•	Stable, read only.
+•	
+10. get_sp_group_det (single group details don’t confuse tafathal)
+Purpose
+Returns complete details of a single group, including current active member count. Used for group profile pages.
+Schema
+groups.get_sp_group_det
+Parameters
+Name	Type	Description
+p_group_id	UUID	Group ID.
+Returns
+JSONB object with the following fields:
+Field	Type	Description
+id	UUID	Group ID.
+group_name	TEXT	Name.
+group_ref	TEXT	Unique reference code.
+group_description	TEXT	Description.
+group_visibility	TEXT	'public' or 'private'.
+group_status	TEXT	'active', 'dormant', 'deleted'.
+max_capacity, min_capacity	NUMERIC	Capacity limits.
+created_by	UUID	ID of the member who created the group.
+created_at, updated_at	TIMESTAMPTZ	Timestamps.
+group_cover_photo_url, group_display_photo_url	TEXT	Photo URLs.
+member_count	BIGINT	Number of active members.
+Example
+sql
+SELECT groups.get_sp_group_det('827ab1fc-7d8c-4598-957e-80b6cffaf595');
+Notes
+•	Throws an exception if the group is not found or has been deleted.
+•	The member_count includes only members with member_status = 'active'.
+•	This function replaces the old get_group and is the canonical way to fetch group details.
+
+11. list_discoverable_groups
+Purpose
+Returns public groups that the user has not yet joined. Used for discovery screens.
+Schema
+groups.list_discoverable_groups
+Parameters
+Name	Type	Default	Description
+p_user_id	UUID	–	Member ID.
+p_limit	INTEGER	20	Maximum number of groups to return (between 1 and 100, though default works).
+Returns
+TABLE with columns:
+Column	Type	Description
+group_id	UUID	Group ID.
+group_name	TEXT	Name.
+group_description	TEXT	Description.
+member_count	BIGINT	Number of active members.
+created_at	TIMESTAMPTZ	Creation date.
+Example
+sql
+SELECT * FROM groups.list_discoverable_groups(
+    p_user_id := '55cd84f5-e11a-4791-879a-acd502203a6a',
+    p_limit := 10
+);
+Notes
+•	Excludes groups that the user is already an active member of.
+•	Only groups with group_visibility = 'public' and group_status = 'active' are included.
+•	Ordered by most recently created first.
+•	Stable, read only.
+
+General Notes for All Functions
+•	Permissions: Most mutation functions (create_group, update_group, delete_group, add_member_to_group) require the caller to be an admin or group creator. The application must verify caller identity before invoking these functions (using Row Level Security or application level checks hapa mkiwa na suggestions anybody anishtue I know the rls is undeniable lakini any better approach will be taken into consideration).
+•	Search Path: All functions explicitly set search_path = groups, public, so unqualified table names resolve correctly.
+•	Error Handling: Functions raise descriptive exceptions (e.g., RAISE EXCEPTION) on validation failures. Frontend should catch these and display user friendly messages.
+•	Data Integrity: Soft deleted records (group_status = 'deleted', member_status = 'exited') are retained for audit but excluded from most read functions.
+•	Performance: Heavily used read functions (is_group_member, list_group_members, etc.) are marked STABLE to allow query optimisation. Appropriate indexes exist on foreign keys and status columns.
+For any questions or missing functions, refer to the source code in the groups schema or contact the backend team.
