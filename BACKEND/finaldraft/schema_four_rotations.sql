@@ -1,6 +1,6 @@
 DROP SCHEMA IF EXISTS rotation CASCADE;
-CREATE SCHEMA rotation;
-SET SEARCH_PATH TO rotation,groups, public, finance;
+CREATE SCHEMA rotations;
+SET SEARCH_PATH TO rotations,groups, public, finance;
 
 CREATE TYPE rotations.rotation_status AS ENUM(
     'active',
@@ -64,7 +64,7 @@ CREATE INDEX group_rotation_plan_code_idx ON rotations.rotation_plan(rotation_pl
 
 CREATE TABLE IF NOT EXISTS rotations.rotation_schedule(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    rotation_plan_member_id UUID NOT NULL REFERENCES groups.rotation_plan_members(id) ON DELETE RESTRICT,
+    rotation_plan_member_id UUID NOT NULL REFERENCES groups.plan_members(id) ON DELETE RESTRICT,
     date_scheduled TIMESTAMPTZ NOT NULL,
     schedule_action rotations.schedule_action NOT NULL ,
     rotation_schedule_index NUMERIC,
@@ -87,7 +87,7 @@ CREATE INDEX group_rotation_rotation_collection_schedule_id_idx ON  rotations.ro
 -- added reserve table to keep track of amounts collected over time for members in a certain rotation plan 
 CREATE TABLE IF NOT EXISTS rotations.rotation_reserve_amount_collected(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    rotation_plan_member_id UUID NOT NULL REFERENCES groups.rotation_plan_members(id) ON DELETE RESTRICT,
+    rotation_plan_member_id UUID NOT NULL REFERENCES groups.plan_members(id) ON DELETE RESTRICT,
     transaction_id UUID NOT NULL REFERENCES finance.transactions(id) ON DELETE RESTRICT
     -- amount_recorded NUMERIC NOT NULL DEFAULT 0 CHECK(amount_recorded>=0),
 
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS rotations.payout_request (
     requested_to UUID NOT NULL REFERENCES groups.group_members(id),
     description TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    reviewer_id UUID REFERENCES public.group_members(id),
+    reviewer_id UUID REFERENCES groups.group_members(id),
     reviewed_at TIMESTAMPTZ
 );
 
@@ -267,7 +267,7 @@ v_plan_id,
 SELECT cron.schedule(
     'daily-rotation-tasks',            
     '0 0 * * *',                        
-    'SELECT groups.process_daily_rotation_tasks();'
+    'SELECT rotations.process_daily_rotation_tasks();'
 );
 
 

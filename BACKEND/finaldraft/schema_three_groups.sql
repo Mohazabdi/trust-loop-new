@@ -7,6 +7,12 @@ CREATE TYPE groups.member_role AS ENUM(
     'admin',
     'member'
 );
+CREATE TYPE groups.invite_status AS ENUM (
+    'pending', 
+    'accepted', 
+    'declined', 
+    'expired', 
+    'revoked');
 
 CREATE TYPE groups.member_status AS ENUM(
     'active',
@@ -14,6 +20,10 @@ CREATE TYPE groups.member_status AS ENUM(
     'banned',
     'deleted'
 );
+CREATE TYPE groups.request_status AS ENUM (
+    'pending', 
+    'approved', 
+    'rejected');
 
 CREATE TYPE groups.interval_status AS ENUM(
     'active',
@@ -31,13 +41,27 @@ CREATE TYPE groups.plan_member_status AS ENUM(
     'completed'
 );
 
+CREATE TABLE IF NOT EXISTS groups.group_members(
+    id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    group_id UUID NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
+    member_id UUID NOT NULL REFERENCES public.members(id) ON DELETE CASCADE,
+    member_role groups.member_role NOT NULL DEFAULT 'member',
+    member_code TEXT UNIQUE NOT NULL DEFAULT public.gen_ref_code('GMC') ,
+    member_status groups.member_status DEFAULT 'active',
+    invited_by UUID REFERENCES  groups.group_members(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(group_id, member_id)
+);
+
+
 CREATE TABLE groups.group_invites (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   group_id uuid NOT NULL,
   invited_by uuid NOT NULL,
   invitee_id uuid,
   invitee_email text,
-  invite_status USER-DEFINED NOT NULL DEFAULT 'pending'::groups.invite_status,
+  invite_status groups.invite_status NOT NULL DEFAULT 'pending'::groups.invite_status,
   invite_code text NOT NULL DEFAULT gen_ref_code('GIV'::text),
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -47,22 +71,22 @@ CREATE TABLE groups.group_invites (
   CONSTRAINT group_invites_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES groups.group_members(id)
 );
 
-CREATE TABLE groups.group_join_requests (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  group_id uuid NOT NULL,
-  requester_id uuid NOT NULL,
-  reviewed_by uuid,
-  request_message text,
-  admin_message text,
-  request_status groups.request_status NOT NULL DEFAULT 'pending',
-  join_code text NOT NULL DEFAULT gen_ref_code('GJR'::text),
-  created_at timestamp with time zone NOT NULL DEFAULT now(),
-  reviewed_at timestamp with time zone,
-  CONSTRAINT group_join_requests_pkey PRIMARY KEY (id),
-  CONSTRAINT group_join_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES groups.group_members(id),
-  CONSTRAINT group_join_requests_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id),
-  CONSTRAINT group_join_requests_requester_id_fkey FOREIGN KEY (requester_id) REFERENCES public.members(id)
-);
+-- CREATE TABLE groups.group_join_requests (
+--   id uuid NOT NULL DEFAULT gen_random_uuid(),
+--   group_id uuid NOT NULL,
+--   requester_id uuid NOT NULL,
+--   reviewed_by uuid,
+--   request_message text,
+--   admin_message text,
+--   request_status groups.request_status NOT NULL DEFAULT 'pending',
+--   join_code text NOT NULL DEFAULT gen_ref_code('GJR'::text),
+--   created_at timestamp with time zone NOT NULL DEFAULT now(),
+--   reviewed_at timestamp with time zone,
+--   CONSTRAINT group_join_requests_pkey PRIMARY KEY (id),
+--   CONSTRAINT group_join_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES groups.group_members(id),
+--   CONSTRAINT group_join_requests_group_id_fkey FOREIGN KEY (group_id) REFERENCES public.groups(id),
+--   CONSTRAINT group_join_requests_requester_id_fkey FOREIGN KEY (requester_id) REFERENCES public.members(id)
+-- );
 
 CREATE TABLE groups.notifications (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -81,18 +105,7 @@ CREATE TABLE groups.notifications (
   CONSTRAINT notifications_member_id_fkey FOREIGN KEY (member_id) REFERENCES public.members(id)
 );
 
-CREATE TABLE IF NOT EXISTS groups.group_members(
-    id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    group_id UUID NOT NULL REFERENCES public.groups(id) ON DELETE CASCADE,
-    member_id UUID NOT NULL REFERENCES public.members(id) ON DELETE CASCADE,
-    member_role groups.member_role NOT NULL DEFAULT 'member',
-    member_code TEXT UNIQUE NOT NULL DEFAULT public.gen_ref_code('GMC') ,
-    member_status groups.member_status DEFAULT 'active',
-    invited_by UUID REFERENCES  groups.group_members(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now(),
-    UNIQUE(group_id, member_id)
-);
+
 
 CREATE INDEX members_group_id_idx ON groups.group_members(group_id);
 CREATE INDEX members_member_id_idx ON groups.group_members(member_id);
@@ -136,7 +149,7 @@ CREATE TABLE IF NOT EXISTS groups.plans (
 CREATE TABLE IF NOT EXISTS groups.plan_invite(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     group_member_id UUID NOT NULL REFERENCES groups.group_members(id) ON DELETE RESTRICT,
-    plan_id UUID NOT NULL REFERENCES groups.plan(id) ON DELETE RESTRICT,
+    plan_id UUID NOT NULL REFERENCES groups.plans(id) ON DELETE RESTRICT,
     expires_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP + INTERVAL '7 days',
     plan_invite_status groups.plan_invite_status,
     created_at timestamp with time zone DEFAULT now(),
@@ -157,11 +170,6 @@ CREATE TABLE IF NOT EXISTS groups.plan_members(
 CREATE INDEX group_plan_member_code_idx ON groups.plan_members(plan_member_code);
 
 --- functions
-
-
-
-
---------------MALEH'S FUNCTIONS
 
 
 -- CREATE TYPE groups.invite_status AS ENUM ('pending', 'accepted', 'expired', 'cancelled','declined');
@@ -1529,9 +1537,7 @@ $$;
 
 
 
--- ── 1. Create the join requests table  ────────────────
 
-CREATE TYPE groups.request_status AS ENUM ('pending', 'approved', 'rejected');
 
 CREATE TABLE IF NOT EXISTS groups.group_join_requests (
     id               UUID        NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
