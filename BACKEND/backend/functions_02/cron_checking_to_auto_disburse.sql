@@ -1,1 +1,0 @@
-SELECT cron.schedule('evaluate-cycle-disbursement', '0 * * * *', 'SELECT groups.evaluate_cycle_and_disburse();');
