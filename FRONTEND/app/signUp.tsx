@@ -371,7 +371,7 @@ export default function LogInPage() {
                 fontSize: 12,
               }}
             >
-              just a heads up, fields with * are mandatory !
+              fill the missing parts that contains the *
             </Text>
           </View>
 
@@ -406,7 +406,7 @@ export default function LogInPage() {
                     backgroundColor: "#fff",
                     width: SCREEN_WIDTH * 0.45,
                   }}
-                  placeholder="Jina la kwanza"
+                  placeholder="first name"
                   placeholderTextColor={"#918d8d"}
                 />
                 {errors.firstName && (
@@ -446,7 +446,7 @@ export default function LogInPage() {
                     backgroundColor: "#fff",
                     width: SCREEN_WIDTH * 0.45,
                   }}
-                  placeholder="Jina la mwisho"
+                  placeholder="Last Name"
                   placeholderTextColor={"#918d8d"}
                 />
                 {errors.lastName && (
