@@ -2,21 +2,37 @@ import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { LoginPageStyles } from "@/styles/auth_styles/login_page.styles";
 import { useRouter } from "expo-router";
 import { AlertCircle, Check, ChevronLeft } from "lucide-react-native";
-import { useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  type TextInputProps,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { toast } from "sonner-native";
 import { supabase } from "../lib/mysupabase/supabase";
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                             */
+/* ------------------------------------------------------------------ */
+
 interface SignUpFormValues {
   firstName: string;
   lastName: string;
@@ -37,6 +53,7 @@ interface SignUpFormErrors {
   password?: string;
   confirmPassword?: string;
   privacyPolicy?: string;
+  backend?: string;
 }
 
 interface SignUpValidationResult {
@@ -46,56 +63,223 @@ interface SignUpValidationResult {
   email?: string;
 }
 
-export default function LogInPage() {
+/* ------------------------------------------------------------------ */
+/*  Constants                                                         */
+/* ------------------------------------------------------------------ */
+
+const ERROR_COLOR = "#c62828";
+const PLACEHOLDER_COLOR = "#918d8d";
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_CODE_REGEX = /^\+?\d{1,4}$/;
+const KENYAN_MOBILE_REGEX = /^(0?[71]\d{8})$/;
+const SPECIAL_CHAR_REGEX = /[@$!%*?&#^()\-_=+[\]{};:'",.<>\/\\|`~]/;
+
+/* ------------------------------------------------------------------ */
+/*  Password helpers                                                  */
+/* ------------------------------------------------------------------ */
+
+interface PasswordRule {
+  label: string;
+  test: (pwd: string) => boolean;
+}
+
+const PASSWORD_RULES: PasswordRule[] = [
+  { label: "At least 8 characters", test: (p) => p.length >= 8 },
+  { label: "A lowercase letter", test: (p) => /[a-z]/.test(p) },
+  { label: "An uppercase letter", test: (p) => /[A-Z]/.test(p) },
+  { label: "A number", test: (p) => /\d/.test(p) },
+  { label: "A special character", test: (p) => SPECIAL_CHAR_REGEX.test(p) },
+];
+
+function calculatePasswordStrength(pwd: string): number {
+  if (!pwd) return 0;
+  let score = 0;
+  if (pwd.length >= 8) score += 1;
+  if (pwd.length >= 12) score += 1;
+  if (/[a-z]/.test(pwd)) score += 1;
+  if (/[A-Z]/.test(pwd)) score += 1;
+  if (/\d/.test(pwd)) score += 1;
+  if (SPECIAL_CHAR_REGEX.test(pwd)) score += 1;
+  return Math.min((score / 6) * 100, 100);
+}
+
+function getPasswordFeedback(score: number): string {
+  if (score === 0) return "";
+  if (score <= 33) return "Weak";
+  if (score <= 50) return "Fair";
+  if (score <= 75) return "Good";
+  if (score <= 83) return "Strong";
+  return "Very strong";
+}
+
+function getStrengthColor(score: number): string {
+  if (score === 0) return "#e0e0e0";
+  if (score <= 33) return ERROR_COLOR;
+  if (score <= 50) return "#ef6c00";
+  if (score <= 75) return "#f9a825";
+  return "#2e7d32";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Validation (backend contract unchanged)                           */
+/* ------------------------------------------------------------------ */
+
+function validateSignUpForm(
+  values: SignUpFormValues,
+): SignUpValidationResult {
+  const errors: SignUpFormErrors = {};
+  let finalPhone: string | undefined;
+  let email: string | undefined;
+
+  // First name
+  const firstName = values.firstName.trim();
+  if (!firstName) {
+    errors.firstName = "First name is required.";
+  } else if (firstName.length < 3) {
+    errors.firstName = "First name must be at least 3 characters.";
+  }
+
+  // Last name
+  const lastName = values.lastName.trim();
+  if (!lastName) {
+    errors.lastName = "Last name is required.";
+  } else if (lastName.length < 3) {
+    errors.lastName = "Last name must be at least 3 characters.";
+  }
+
+  // Phone code
+  let phoneCode = values.phoneCode.trim();
+  if (!phoneCode) {
+    errors.phoneCode = "Phone code is required.";
+  } else {
+    if (!PHONE_CODE_REGEX.test(phoneCode)) {
+      errors.phoneCode = "Invalid phone code (e.g. +254 or 254).";
+    } else if (!phoneCode.startsWith("+")) {
+      phoneCode = `+${phoneCode}`;
+    }
+  }
+
+  // Phone number
+  const rawPhoneNo = values.phoneNo.replace(/\s/g, "");
+  if (!rawPhoneNo) {
+    errors.phoneNo = "Phone number is required.";
+  } else if (!KENYAN_MOBILE_REGEX.test(rawPhoneNo)) {
+    errors.phoneNo = "Enter a valid phone number (07… or 01…).";
+  } else if (!errors.phoneCode) {
+    const digits = rawPhoneNo.startsWith("0")
+      ? rawPhoneNo.substring(1)
+      : rawPhoneNo;
+    finalPhone = `${phoneCode}${digits}`;
+  }
+
+  // Email (optional)
+  const emailTrimmed = values.email.trim();
+  if (emailTrimmed) {
+    if (!EMAIL_REGEX.test(emailTrimmed)) {
+      errors.email = "Invalid email address.";
+    } else {
+      email = emailTrimmed;
+    }
+  }
+
+  // Password — must satisfy every rule
+  const password = values.password;
+  if (!password) {
+    errors.password = "Password is required.";
+  } else {
+    const failing = PASSWORD_RULES.filter((r) => !r.test(password));
+    if (failing.length > 0) {
+      const missing = failing.map((r) => r.label.toLowerCase());
+      errors.password = `Password needs ${missing.join(", ")}.`;
+    }
+  }
+
+  // Confirm password
+  if (!values.confirmPassword) {
+    errors.confirmPassword = "Please confirm your password.";
+  } else if (values.confirmPassword !== password) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  // Privacy policy
+  if (!values.acceptedPrivacyPolicy) {
+    errors.privacyPolicy = "You must accept the privacy policy.";
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+    finalPhone,
+    email,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Reusable pieces                                                   */
+/* ------------------------------------------------------------------ */
+
+interface FieldProps
+  extends Omit<TextInputProps, "style" | "placeholderTextColor"> {
+  label: string;
+  error?: string;
+  dimmed?: boolean;
+  inputStyle?: TextInputProps["style"];
+}
+
+const Field = forwardRef<TextInput, FieldProps>(function Field(
+  { label, error, dimmed, inputStyle, ...rest },
+  ref,
+) {
+  return (
+    <View style={{ flex: 1, gap: 5 }}>
+      <Text style={local.label}>{label}</Text>
+      <TextInput
+        ref={ref}
+        placeholderTextColor={PLACEHOLDER_COLOR}
+        style={[
+          local.input,
+          error ? local.inputError : null,
+          dimmed ? local.inputDimmed : null,
+          inputStyle,
+        ]}
+        {...rest}
+      />
+      <ErrorText message={error} />
+    </View>
+  );
+});
+
+function ErrorText({
+  message,
+  centered = false,
+}: {
+  message?: string;
+  centered?: boolean;
+}) {
+  if (!message) return null;
+  return (
+    <Text
+      style={[
+        local.errorText,
+        centered ? local.errorTextCentered : local.errorTextLeft,
+      ]}
+    >
+      {message}
+    </Text>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen                                                            */
+/* ------------------------------------------------------------------ */
+
+export default function SignUpPage() {
   const { theme } = useGlobalStorage();
   const router = useRouter();
-  const styles = useMemo(() => LoginPageStyles(theme), [theme]);
-  const { width: SCREEN_WIDTH } = Dimensions.get("window");
-  // Add this state at the top of your component
-  const [passwordStrength, setPasswordStrength] = useState(0);
-  const [passwordFeedback, setPasswordFeedback] = useState("");
-  const calculatePasswordStrength = (pwd: string): number => {
-    if (!pwd) return 0;
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const themeStyles = useMemo(() => LoginPageStyles(theme), [theme]);
 
-    let score = 0;
-
-    // Length checks
-    if (pwd.length >= 8) score += 1;
-    if (pwd.length >= 12) score += 1;
-
-    // Character variety checks
-    if (/[a-z]/.test(pwd)) score += 1;
-    if (/[A-Z]/.test(pwd)) score += 1;
-    if (/\d/.test(pwd)) score += 1;
-    if (/[@$!%*?&#^()\-_=+[\]{};:'",.<>\/\\|`~]/.test(pwd)) score += 1;
-
-    // Max possible score is 6, normalize to 0-100
-    return Math.min((score / 6) * 100, 100);
-  };
-
-  const getPasswordFeedback = (
-    pwd: string,
-  ): { score: number; feedback: string } => {
-    const score = calculatePasswordStrength(pwd);
-
-    let feedback = "";
-    if (!pwd) feedback = "";
-    else if (score <= 33) feedback = "Weak";
-    else if (score <= 50) feedback = "Fair";
-    else if (score <= 75) feedback = "Good";
-    else if (score <= 83) feedback = "Strong";
-    else feedback = "Very strong";
-
-    return { score, feedback };
-  };
-  // Color mapping based on strength
-  const getStrengthColor = (strength: number): string => {
-    if (strength === 0) return "#e0e0e0";
-    if (strength <= 33) return "#c62828"; // Weak - red
-    if (strength <= 50) return "#ef6c00"; // Fair - orange
-    if (strength <= 75) return "#f9a825"; // Good - amber
-    return "#2e7d32"; // Strong - green
-  };
+  // Form state
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneCode, setPhoneCode] = useState("+254");
@@ -104,135 +288,50 @@ export default function LogInPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedPrivacyPolicy, setAcceptedPrivacyPolicy] = useState(false);
+
+  // UI state
   const [errors, setErrors] = useState<SignUpFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  function validateSignUpForm(
-    values: SignUpFormValues,
-  ): SignUpValidationResult {
-    const errors: SignUpFormErrors = {};
-    let finalPhone: string | undefined;
-    let email: string | undefined;
 
-    // ── First Name ───────────────────────────────────────────────
-    const firstName = values.firstName.trim();
-    if (!firstName) {
-      errors.firstName = "First name is required.";
-    } else if (firstName.length < 3) {
-      errors.firstName = "First name must be at least 3 characters.";
-    }
+  // Focus refs
+  const lastNameRef = useRef<TextInput>(null);
+  const phoneNoRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
 
-    // ── Last Name ────────────────────────────────────────────────
-    const lastName = values.lastName.trim();
-    if (!lastName) {
-      errors.lastName = "Last name is required.";
-    } else if (lastName.length < 3) {
-      errors.lastName = "Last name must be at least 3 character.";
-    }
+  // Clear backend error whenever the user edits any field
+  useEffect(() => {
+    setErrors((prev) =>
+      prev.backend ? { ...prev, backend: undefined } : prev,
+    );
+  }, [
+    firstName,
+    lastName,
+    phoneCode,
+    phoneNo,
+    email,
+    password,
+    confirmPassword,
+    acceptedPrivacyPolicy,
+  ]);
 
-    // ── Phone Code ───────────────────────────────────────────────
-    let phoneCode = values.phoneCode.trim();
-    if (!phoneCode) {
-      errors.phoneCode = "Phone code is required.";
-    } else {
-      // Standard calling code format: optional '+' followed by 1-4 digits
-      const codeRegex = /^\+?\d{1,4}$/;
-      if (!codeRegex.test(phoneCode)) {
-        errors.phoneCode = "Invalid phone code (e.g. +254 or 254).";
-      }
-      // Normalize: ensure leading '+'
-      if (!phoneCode.startsWith("+")) {
-        phoneCode = "+" + phoneCode;
-      }
-    }
+  // Derived password strength
+  const passwordStrength = useMemo(
+    () => calculatePasswordStrength(password),
+    [password],
+  );
+  const passwordFeedback = useMemo(
+    () => getPasswordFeedback(passwordStrength),
+    [passwordStrength],
+  );
 
-    // ── Phone Number ─────────────────────────────────────────────
-    const rawPhoneNo = values.phoneNo.replace(/\s/g, ""); // remove any spaces
-    if (!rawPhoneNo) {
-      errors.phoneNo = "Phone number is required.";
-    } else {
-      // Accept Kenyan mobile formats:
-      //   - 9 digits starting with 7 or 1 (e.g. 712345678)
-      //   - 10 digits starting with 07 or 01 (e.g. 0712345678)
-      //   - with or without leading 0
-      const kenyanMobileRegex = /^(0?[71]\d{8})$/;
-      if (!kenyanMobileRegex.test(rawPhoneNo)) {
-        errors.phoneNo = "Enter a valid phone number (07… or 01…).";
-      } else if (!errors.phoneCode) {
-        // Normalize: strip leading zero and prepend the country code
-        let digits = rawPhoneNo;
-        if (digits.startsWith("0")) {
-          digits = digits.substring(1);
-        }
-        finalPhone = `${phoneCode}${digits}`;
-      }
-    }
+  /* ---------------- Submit (backend contract unchanged) ------------ */
 
-    // ── Email (optional) ─────────────────────────────────────────
-    const emailTrimmed = values.email.trim();
-    if (emailTrimmed) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(emailTrimmed)) {
-        errors.email = "Invalid email address.";
-      } else {
-        email = emailTrimmed;
-      }
-    }
+  const handleCreateAccount = useCallback(async () => {
+    Keyboard.dismiss();
 
-    // ── Password ─────────────────────────────────────────────────
-    const password = values.password;
-    if (!password) {
-      errors.password = "Password is required.";
-    } else {
-      const strengthScore = calculatePasswordStrength(password);
-
-      // Accept passwords that score "Fair" or better (> 33%)
-      if (strengthScore <= 33) {
-        const missingRequirements: string[] = [];
-
-        if (password.length < 8) {
-          missingRequirements.push("at least 8 characters");
-        }
-        if (!/[a-z]/.test(password)) {
-          missingRequirements.push("a lowercase letter");
-        }
-        if (!/[A-Z]/.test(password)) {
-          missingRequirements.push("an uppercase letter");
-        }
-        if (!/\d/.test(password)) {
-          missingRequirements.push("a number");
-        }
-        if (!/[@$!%*?&#^()\-_=+[\]{};:'",.<>\/\\|`~]/.test(password)) {
-          missingRequirements.push("a special character");
-        }
-
-        if (password.length < 8) {
-          errors.password =
-            "Password is too weak. Make it at least 8 characters.";
-        } else {
-          errors.password = `Password needs ${missingRequirements.join(", ")}.`;
-        }
-      }
-    }
-
-    // ── Confirm Password ─────────────────────────────────────────
-    if (!values.confirmPassword) {
-      errors.confirmPassword = "Please confirm your password.";
-    } else if (values.confirmPassword !== password) {
-      errors.confirmPassword = "Passwords do not match.";
-    }
-
-    // ── Privacy Policy ───────────────────────────────────────────
-    if (!values.acceptedPrivacyPolicy) {
-      errors.privacyPolicy = "You must accept the privacy policy.";
-    }
-
-    const isValid = Object.keys(errors).length === 0;
-
-    return { isValid, errors, finalPhone, email };
-  }
-
-  const handleCreateAccount = async () => {
     const result = validateSignUpForm({
       firstName,
       lastName,
@@ -247,599 +346,416 @@ export default function LogInPage() {
     setErrors(result.errors);
     if (!result.isValid) return;
 
+    const hasEmail = Boolean(result.email);
+    const hasPhone = Boolean(result.finalPhone);
+
+    if (!hasEmail && !hasPhone) {
+      toast.error("A phone number or email is required.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // Determine primary identity: prefer email if provided, else phone
-      const hasEmail = !!result.email;
-      const hasPhone = !!result.finalPhone;
-
-      if (!hasEmail && !hasPhone) {
-        // Shouldn’t happen because validation requires at least phone
-        toast.error("A phone number or email is required.");
-        return;
-      }
-
-      // Common metadata for the trigger
       const metadata = {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
-        // Always pass phone if available, so the trigger can use it later
         ...(hasPhone && { phone: result.finalPhone }),
       };
 
-      let signUpResult;
+      const { data, error } = hasEmail
+        ? await supabase.auth.signUp({
+            email: result.email!,
+            password,
+            options: { data: metadata },
+          })
+        : await supabase.auth.signUp({
+            phone: result.finalPhone!,
+            password,
+            options: { data: metadata },
+          });
 
-      if (hasEmail) {
-        // Sign up with email + password
-        signUpResult = await supabase.auth.signUp({
-          email: result.email!,
-          password,
-          options: {
-            data: metadata,
-            // If you want to redirect to a specific page after email confirmation:
-            // emailRedirectTo: "yourapp://welcome",
-          },
-        });
-      } else {
-        // Sign up with phone + password (requires phone provider enabled)
-        signUpResult = await supabase.auth.signUp({
-          phone: result.finalPhone!,
-          password,
-          options: {
-            data: metadata,
-          },
-        });
-      }
-
-      if (signUpResult.error) {
-        setErrors((prev) => ({ ...prev, backend: signUpResult.error.message }));
-        console.log();
-        toast.error(signUpResult.error.message, {
+      if (error) {
+        setErrors((prev) => ({ ...prev, backend: error.message }));
+        toast.error(error.message, {
           icon: <AlertCircle size={20} color="red" />,
         });
         return;
       }
 
-      // Success – show appropriate message
-      const user = signUpResult.data.user;
-      // After successful signUpResult, replace the toast + router.push part
-      if (user) {
-        if (hasEmail) {
-          // Email signup → go to check email screen
-          router.push({
-            pathname: "/checkEmail",
-            params: { email: result.email! },
-          });
-        } else {
-          // Phone signup → OTP already sent, go directly to verification
-          router.push({
-            pathname: "/loginOTP",
-            params: { identifier: result.finalPhone!, mode: "verify" },
-          });
-        }
+      const user = data.user;
+      if (!user) return;
+
+      if (hasEmail) {
+        router.push({
+          pathname: "/checkEmail",
+          params: { email: result.email! },
+        });
+      } else {
+        router.push({
+          pathname: "/loginOTP",
+          params: { identifier: result.finalPhone!, mode: "verify" },
+        });
       }
     } catch (e) {
-      toast.error("Something went wrong. Please try again.");
-      console.error(e);
+      const message =
+        e instanceof Error ? e.message : "Something went wrong. Try again.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [
+    firstName,
+    lastName,
+    phoneCode,
+    phoneNo,
+    email,
+    password,
+    confirmPassword,
+    acceptedPrivacyPolicy,
+    router,
+  ]);
+
+  /* ---------------- Render ----------------------------------------- */
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={themeStyles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <TouchableOpacity
           onPress={() => router.back()}
-          style={{
-            padding: 20,
-            borderRadius: 30,
-            width: 50,
-            justifyContent: "center",
-            alignItems: "center",
-            height: 50,
-            backgroundColor: "#fff",
-            shadowColor: "#212520",
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.4,
-            shadowRadius: 8,
-            elevation: 5,
-            marginLeft: 20,
-            marginTop: 10,
-          }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={local.backButton}
         >
-          <ChevronLeft size={23} color={"#212520"} />
+          <ChevronLeft size={23} color="#212520" />
         </TouchableOpacity>
+
         <ScrollView
-          contentContainerStyle={styles.mainContent}
+          contentContainerStyle={themeStyles.mainContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={
             Platform.OS === "ios" ? "interactive" : "on-drag"
           }
         >
-          <View style={styles.appLogoContainer}>
-            <Text style={styles.logoText}>T</Text>
-            <Text style={styles.platformNameText}>TrustLoop</Text>
+          {/* Brand header */}
+          <View style={themeStyles.appLogoContainer}>
+            <Text style={themeStyles.logoText}>T</Text>
+            <Text style={themeStyles.platformNameText}>TrustLoop</Text>
           </View>
-          <View style={styles.greetingsContainer}>
-            <Text style={styles.greetingsText}>Join TrustLoop</Text>
-            <Text
-              style={{
-                fontSize: 12,
-              }}
-            >
-              fill the missing parts that contains the *
+
+          <View style={themeStyles.greetingsContainer}>
+            <Text style={themeStyles.greetingsText}>Join TrustLoop</Text>
+            <Text style={{ fontSize: 12 }}>
+              Fill in the fields marked with *
             </Text>
           </View>
 
-          <View style={styles.formContainer}>
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 10,
-              }}
-            >
-              <View
-                style={{
-                  gap: 5,
-                }}
-              >
-                <Text style={styles.fieldLabel}>First Name *</Text>
-                <TextInput
+          <View style={themeStyles.formContainer}>
+            {/* Name row */}
+            <View style={local.row}>
+              <View style={{ flex: 1 }}>
+                <Field
+                  label="First Name *"
                   value={firstName}
                   onChangeText={setFirstName}
-                  keyboardType="default"
-                  autoComplete="off"
-                  textContentType="none"
-                  importantForAutofill="no"
-                  style={{
-                    color: "#000000",
-                    padding: 15,
-                    fontSize: 13,
-                    fontWeight: "bold",
-                    borderRadius: 20,
-                    // borderWidth: 1,
-                    borderColor: errors.firstName ? "#c62828" : "#212520",
-                    backgroundColor: "#fff",
-                    width: SCREEN_WIDTH * 0.45,
-                  }}
-                  placeholder="first name"
-                  placeholderTextColor={"#918d8d"}
+                  placeholder="First name"
+                  editable={!isSubmitting}
+                  dimmed={isSubmitting}
+                  autoCapitalize="words"
+                  autoComplete="given-name"
+                  textContentType="givenName"
+                  maxLength={60}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => lastNameRef.current?.focus()}
+                  error={errors.firstName}
                 />
-                {errors.firstName && (
-                  <Text
-                    style={{
-                      color: "#c62828",
-                      fontSize: 11,
-                      fontWeight: "bold",
-                      paddingLeft: 4,
-                    }}
-                  >
-                    {errors.firstName}
-                  </Text>
-                )}
               </View>
-              <View
-                style={{
-                  gap: 5,
-                }}
-              >
-                <Text style={styles.fieldLabel}>Last Name *</Text>
-                <TextInput
+              <View style={{ flex: 1 }}>
+                <Field
+                  ref={lastNameRef}
+                  label="Last Name *"
                   value={lastName}
                   onChangeText={setLastName}
-                  keyboardType="default"
-                  autoComplete="off"
-                  textContentType="none"
-                  importantForAutofill="no"
-                  style={{
-                    color: "#000000",
-                    padding: 15,
-                    fontSize: 13,
-                    fontWeight: "bold",
-                    borderRadius: 20,
-                    // borderWidth: 1,
-                    borderColor: errors.lastName ? "#c62828" : "#212520",
-                    backgroundColor: "#fff",
-                    width: SCREEN_WIDTH * 0.45,
-                  }}
-                  placeholder="Last Name"
-                  placeholderTextColor={"#918d8d"}
+                  placeholder="Last name"
+                  editable={!isSubmitting}
+                  dimmed={isSubmitting}
+                  autoCapitalize="words"
+                  autoComplete="family-name"
+                  textContentType="familyName"
+                  maxLength={60}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => phoneNoRef.current?.focus()}
+                  error={errors.lastName}
                 />
-                {errors.lastName && (
-                  <Text
-                    style={{
-                      color: "#c62828",
-                      fontSize: 11,
-                      fontWeight: "bold",
-                      paddingLeft: 4,
-                    }}
-                  >
-                    {errors.lastName}
-                  </Text>
-                )}
               </View>
             </View>
-            <View
-              style={{
-                gap: 5,
-              }}
-            >
-              <Text style={styles.fieldLabel}>Phone Number *</Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  gap: 5,
-                }}
-              >
+
+            {/* Phone */}
+            <View style={{ gap: 5 }}>
+              <Text style={themeStyles.fieldLabel}>Phone Number *</Text>
+              <View style={local.rowTight}>
                 <TextInput
                   value={phoneCode}
                   onChangeText={setPhoneCode}
-                  keyboardType="default"
-                  autoComplete="off"
+                  editable={!isSubmitting}
+                  keyboardType="phone-pad"
+                  autoComplete="tel-country-code"
                   textContentType="none"
-                  importantForAutofill="no"
-                  style={{
-                    color: "#000000",
-                    padding: 15,
-                    fontSize: 13,
-                    fontWeight: "bold",
-                    borderTopLeftRadius: 20,
-                    borderBottomLeftRadius: 20,
-                    borderColor: errors.phoneCode ? "#c62828" : "#212520",
-                    // borderWidth: 1,
-                    backgroundColor: "#fff",
-                    width: SCREEN_WIDTH * 0.2,
-                  }}
+                  maxLength={5}
                   placeholder="+254"
-                  placeholderTextColor={"#918d8d"}
+                  placeholderTextColor={PLACEHOLDER_COLOR}
+                  style={[
+                    local.input,
+                    local.inputPhoneCode,
+                    errors.phoneCode ? local.inputError : null,
+                    isSubmitting ? local.inputDimmed : null,
+                  ]}
                 />
                 <TextInput
+                  ref={phoneNoRef}
                   value={phoneNo}
                   onChangeText={setPhoneNo}
+                  editable={!isSubmitting}
                   keyboardType="phone-pad"
-                  autoComplete="off"
-                  textContentType="none"
-                  importantForAutofill="no"
-                  style={{
-                    color: "#000000",
-                    padding: 15,
-                    fontSize: 13,
-                    fontWeight: "bold",
-                    borderTopRightRadius: 20,
-                    borderBottomRightRadius: 20,
-                    borderColor: errors.phoneNo ? "#c62828" : "#212520",
-                    // borderWidth: 1,
-                    backgroundColor: "#fff",
-                    width: SCREEN_WIDTH * 0.6,
-                  }}
-                  placeholder="07xxx"
-                  placeholderTextColor={"#918d8d"}
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
+                  maxLength={15}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                  placeholder="07XXXXXXXX"
+                  placeholderTextColor={PLACEHOLDER_COLOR}
+                  style={[
+                    local.input,
+                    local.inputPhoneNo,
+                    errors.phoneNo ? local.inputError : null,
+                    isSubmitting ? local.inputDimmed : null,
+                  ]}
                 />
               </View>
-              {errors.phoneCode && (
-                <Text
-                  style={{
-                    color: "#c62828",
-                    fontSize: 11,
-                    fontWeight: "bold",
-                    paddingLeft: 4,
-                  }}
-                >
-                  {errors.phoneCode}
-                </Text>
-              )}
-              {errors.phoneNo && (
-                <Text
-                  style={{
-                    color: "#c62828",
-                    fontSize: 11,
-                    fontWeight: "bold",
-                    paddingLeft: 4,
-                  }}
-                >
-                  {errors.phoneNo}
-                </Text>
-              )}
+              <ErrorText message={errors.phoneCode} />
+              <ErrorText message={errors.phoneNo} />
             </View>
-            <View
-              style={{
-                gap: 5,
-              }}
-            >
-              <Text style={styles.fieldLabel}>Email (optional)</Text>
+
+            {/* Email */}
+            <View style={{ gap: 5 }}>
+              <Text style={themeStyles.fieldLabel}>Email (optional)</Text>
               <TextInput
+                ref={emailRef}
                 value={email}
                 onChangeText={setEmail}
+                editable={!isSubmitting}
                 keyboardType="email-address"
-                autoComplete="off"
-                textContentType="none"
-                importantForAutofill="no"
-                style={{
-                  color: "#000000",
-                  padding: 15,
-                  fontSize: 13,
-                  fontWeight: "bold",
-                  borderRadius: 20,
-                  // borderWidth: 1,
-                  borderColor: errors.email ? "#c62828" : "#212520",
-                  backgroundColor: "#fff",
-                  width: SCREEN_WIDTH * 0.7,
-                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
+                maxLength={254}
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => passwordRef.current?.focus()}
                 placeholder="example@gmail.com"
-                placeholderTextColor={"#918d8d"}
+                placeholderTextColor={PLACEHOLDER_COLOR}
+                style={[
+                  local.input,
+                  { width: SCREEN_WIDTH * 0.75 },
+                  errors.email ? local.inputError : null,
+                  isSubmitting ? local.inputDimmed : null,
+                ]}
               />
-              {errors.email && (
-                <Text
-                  style={{
-                    color: "#c62828",
-                    fontSize: 11,
-                    fontWeight: "bold",
-                    paddingLeft: 4,
-                  }}
-                >
-                  {errors.email}
-                </Text>
-              )}
+              <ErrorText message={errors.email} />
             </View>
-            <View>
-              {/* ─── Password Strength Meter ─── */}
-              {password.length > 0 && (
-                <View style={{ marginTop: 8, gap: 6 }}>
-                  {/* Progress bar track */}
+
+            {/* Password strength + checklist */}
+            {password.length > 0 && (
+              <View style={local.strengthWrapper}>
+                <View style={local.strengthTrack}>
                   <View
-                    style={{
-                      width: "100%",
-                      height: 6,
-                      backgroundColor: "#e0e0e0",
-                      borderRadius: 3,
-                      overflow: "hidden",
-                    }}
-                  >
-                    {/* Progress bar fill (animated width via state) */}
-                    <View
-                      style={{
+                    style={[
+                      local.strengthFill,
+                      {
                         width: `${passwordStrength}%`,
-                        height: "100%",
                         backgroundColor: getStrengthColor(passwordStrength),
-                        borderRadius: 3,
-                      }}
-                    />
-                  </View>
-
-                  {/* Strength label */}
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingHorizontal: 4,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: "600",
-                        color: getStrengthColor(passwordStrength),
-                      }}
-                    >
-                      {passwordFeedback}
-                    </Text>
-
-                    {/* Password tips when weak */}
-                    {passwordStrength <= 50 && (
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          color: "#8b8888",
-                          fontStyle: "italic",
-                        }}
-                      >
-                        {password.length < 8
-                          ? "At least 8 characters"
-                          : "Add uppercase, numbers & symbols"}
-                      </Text>
-                    )}
-                  </View>
-                </View>
-              )}
-              <View
-                style={{
-                  flexDirection: "row",
-                  gap: 10,
-                }}
-              >
-                <View style={{ gap: 5 }}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={styles.fieldLabel}>Password *</Text>
-                    <TouchableOpacity
-                      onPressIn={() => setIsPasswordVisible(!isPasswordVisible)}
-                      onPressOut={() =>
-                        setIsPasswordVisible(!isPasswordVisible)
-                      }
-                    >
-                      <Text
-                        style={{
-                          color: "#8b8888",
-                          fontSize: 13,
-                          fontWeight: "bold",
-                          fontStyle: "italic",
-                          textDecorationLine: "underline",
-                        }}
-                      >
-                        {isPasswordVisible ? "Hide" : "Show"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                  <TextInput
-                    value={password}
-                    onChangeText={(text) => {
-                      setPassword(text);
-                      const { score, feedback } = getPasswordFeedback(text);
-                      setPasswordStrength(score);
-                      setPasswordFeedback(feedback);
-                    }}
-                    secureTextEntry={!isPasswordVisible}
-                    keyboardType="default"
-                    style={{
-                      color: "#000000",
-                      padding: 15,
-                      fontSize: 13,
-                      fontWeight: "bold",
-                      borderRadius: 20,
-                      // borderWidth: 1,
-                      backgroundColor: "#fff",
-                      borderColor: errors.password ? "#c62828" : "#212520",
-                      width: SCREEN_WIDTH * 0.45,
-                    }}
-                    // placeholder="example@gmail.com"
-                    // placeholderTextColor={"#918d8d"}
+                      },
+                    ]}
                   />
                 </View>
-                <View style={{ gap: 5 }}>
-                  <Text style={styles.fieldLabel}>Confirm Password *</Text>
-                  <TextInput
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!isPasswordVisible}
-                    keyboardType="default"
-                    style={{
-                      color: "#000000",
-                      padding: 15,
-                      fontSize: 13,
-                      fontWeight: "bold",
-                      borderRadius: 20,
-                      // borderWidth: 1,
-                      borderColor: errors.confirmPassword
-                        ? "#c62828"
-                        : "#212520",
-                      backgroundColor: "#fff",
-                      width: SCREEN_WIDTH * 0.45,
-                    }}
-                    // placeholder="example@gmail.com"
-                    // placeholderTextColor={"#918d8d"}
-                  />
+                <View style={local.strengthLabels}>
+                  <Text
+                    style={[
+                      local.strengthText,
+                      { color: getStrengthColor(passwordStrength) },
+                    ]}
+                  >
+                    {passwordFeedback}
+                  </Text>
+                </View>
+                <View style={local.rulesList}>
+                  {PASSWORD_RULES.map((rule) => {
+                    const passed = rule.test(password);
+                    return (
+                      <View key={rule.label} style={local.ruleRow}>
+                        <View
+                          style={[
+                            local.ruleDot,
+                            passed && local.ruleDotPassed,
+                          ]}
+                        >
+                          {passed && (
+                            <Check size={12} color="#fff" strokeWidth={3} />
+                          )}
+                        </View>
+                        <Text
+                          style={[
+                            local.ruleText,
+                            passed && local.ruleTextPassed,
+                          ]}
+                        >
+                          {rule.label}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
-              {errors.password && (
-                <Text
-                  style={{
-                    color: "#c62828",
-                    fontSize: 11,
-                    fontWeight: "bold",
-                    paddingLeft: 4,
-                  }}
-                >
-                  {errors.password}
-                </Text>
-              )}
-              {errors.confirmPassword && (
-                <Text
-                  style={{
-                    color: "#c62828",
-                    fontSize: 11,
-                    fontWeight: "bold",
-                    paddingLeft: 4,
-                  }}
-                >
-                  {errors.confirmPassword}
-                </Text>
-              )}
-            </View>
-          </View>
-          <View
-            style={{
-              width: "75%",
-              paddingHorizontal: 3,
+            )}
 
-              // borderWidth: 1,
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => setAcceptedPrivacyPolicy(!acceptedPrivacyPolicy)}
-              activeOpacity={0.7}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                // alignItems: "center",
-                gap: 14,
-                paddingVertical: 5,
-              }}
-            >
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 8,
-                  borderWidth: 2,
-                  borderColor: "#17690c",
-                  backgroundColor: acceptedPrivacyPolicy ? "#17690c" : "#fff",
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
+            {/* Password row */}
+            <View style={local.row}>
+              <View style={{ flex: 1, gap: 5 }}>
+                <View style={local.passwordHeader}>
+                  <Text style={themeStyles.fieldLabel}>Password *</Text>
+                  <TouchableOpacity
+                    onPress={() => setIsPasswordVisible((v) => !v)}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isPasswordVisible ? "Hide password" : "Show password"
+                    }
+                  >
+                    <Text style={local.toggleText}>
+                      {isPasswordVisible ? "Hide" : "Show"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  ref={passwordRef}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!isSubmitting}
+                  secureTextEntry={!isPasswordVisible}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  maxLength={128}
+                  returnKeyType="next"
+                  submitBehavior="submit"
+                  onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                  style={[
+                    local.input,
+                    errors.password ? local.inputError : null,
+                    isSubmitting ? local.inputDimmed : null,
+                  ]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Field
+                  ref={confirmPasswordRef}
+                  label="Confirm Password *"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  editable={!isSubmitting}
+                  dimmed={isSubmitting}
+                  secureTextEntry={!isPasswordVisible}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  maxLength={128}
+                  returnKeyType="done"
+                  submitBehavior="blurAndSubmit"
+                  onSubmitEditing={handleCreateAccount}
+                  error={errors.confirmPassword}
+                />
+              </View>
+            </View>
+            <ErrorText message={errors.password} />
+          </View>
+
+          {/* Privacy policy */}
+          <View style={local.privacyWrapper}>
+            <View style={local.privacyRow}>
+              <Pressable
+                onPress={() => setAcceptedPrivacyPolicy((v) => !v)}
+                hitSlop={8}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: acceptedPrivacyPolicy }}
+                style={[
+                  local.checkbox,
+                  acceptedPrivacyPolicy && local.checkboxChecked,
+                ]}
               >
                 {acceptedPrivacyPolicy && (
                   <Check size={18} color="#fff" strokeWidth={3} />
                 )}
-              </View>
-
-              {/* The Label Text */}
+              </Pressable>
               <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "600",
-                    color: "#1a1a1a",
-                  }}
-                >
-                  I have read and accepted the privacy policy
+                <Text style={local.privacyText}>
+                  I have read and accepted the{" "}
+                  <Text
+                    onPress={() => router.push("/privacy")}
+                    style={local.privacyLink}
+                  >
+                    privacy policy
+                  </Text>
+                  .
                 </Text>
               </View>
-            </TouchableOpacity>
-            {errors.privacyPolicy && (
-              <Text
-                style={{
-                  color: "#c62828",
-                  fontSize: 11,
-                  fontWeight: "bold",
-                  paddingLeft: 4,
-                }}
-              >
-                {errors.privacyPolicy}
-              </Text>
-            )}
+            </View>
+            <ErrorText message={errors.privacyPolicy} />
           </View>
-          <View style={styles.buttonContainer}>
+
+          {/* Backend error */}
+          <ErrorText message={errors.backend} centered />
+
+          {/* Submit */}
+          <View style={themeStyles.buttonContainer}>
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={[
+                themeStyles.primaryButton,
+                isSubmitting && { opacity: 0.7 },
+              ]}
               onPress={handleCreateAccount}
               disabled={isSubmitting}
+              accessibilityRole="button"
+              accessibilityLabel="Create account"
             >
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.primaryButtonText}>Log in</Text>
+                <Text style={themeStyles.primaryButtonText}>Create Account</Text>
               )}
             </TouchableOpacity>
           </View>
-          <View style={styles.loginPreliminariesContainer}>
-            <View style={styles.createAccountContainer}>
-              <Text style={styles.newToTrustLoopText}>Have an Account? </Text>
+
+          {/* Footer */}
+          <View style={themeStyles.loginPreliminariesContainer}>
+            <View style={themeStyles.createAccountContainer}>
+              <Text style={themeStyles.newToTrustLoopText}>
+                Have an account?{" "}
+              </Text>
               <TouchableOpacity
                 style={{ padding: 4 }}
-                onPress={() => router.push(`/login`)}
+                onPress={() => router.push("/login")}
               >
-                <Text style={styles.createAccountText}>Log in instead</Text>
+                <Text style={themeStyles.createAccountText}>
+                  Log in instead
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -848,3 +764,175 @@ export default function LogInPage() {
     </SafeAreaView>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  Local styles                                                      */
+/* ------------------------------------------------------------------ */
+
+const local = StyleSheet.create({
+  backButton: {
+    padding: 15,
+    borderRadius: 30,
+    width: 50,
+    height: 50,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    shadowColor: "#212520",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 5,
+    marginLeft: 20,
+    marginTop: 10,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1a1a1a",
+  },
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  rowTight: {
+    flexDirection: "row",
+    gap: 5,
+  },
+  input: {
+    color: "#000000",
+    padding: 15,
+    fontSize: 13,
+    fontWeight: "600",
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e5e5",
+  },
+  inputError: {
+    borderColor: ERROR_COLOR,
+  },
+  inputDimmed: {
+    opacity: 0.6,
+  },
+  inputPhoneCode: {
+    width: 90,
+    borderTopRightRadius: 0,
+    borderBottomRightRadius: 0,
+  },
+  inputPhoneNo: {
+    flex: 1,
+    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 0,
+  },
+  strengthWrapper: {
+    marginTop: 8,
+    gap: 6,
+  },
+  strengthTrack: {
+    width: "100%",
+    height: 6,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  strengthFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  strengthLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+  },
+  strengthText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  rulesList: {
+    marginTop: 4,
+    gap: 4,
+  },
+  ruleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ruleDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#c4c4c4",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  ruleDotPassed: {
+    backgroundColor: "#2e7d32",
+    borderColor: "#2e7d32",
+  },
+  ruleText: {
+    fontSize: 11,
+    color: "#8b8888",
+  },
+  ruleTextPassed: {
+    color: "#2e7d32",
+    fontWeight: "600",
+  },
+  passwordHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  toggleText: {
+    color: "#8b8888",
+    fontSize: 12,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+    fontStyle: "italic",
+  },
+  privacyWrapper: {
+    width: "85%",
+    paddingHorizontal: 3,
+  },
+  privacyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 5,
+  },
+  checkbox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "#17690c",
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: "#17690c",
+  },
+  privacyText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1a1a1a",
+  },
+  privacyLink: {
+    textDecorationLine: "underline",
+    color: "#17690c",
+  },
+  errorText: {
+    color: ERROR_COLOR,
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+  errorTextLeft: {
+    paddingLeft: 4,
+  },
+  errorTextCentered: {
+    textAlign: "center",
+  },
+});
