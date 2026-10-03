@@ -44,6 +44,7 @@ import {
   netShareCapitalForMember,
 } from "@/store/useSaccoStorage";
 import { useSavingsStorage } from "@/store/useSavingsStorage";
+import { useTabBarBottomInset } from "@/lib/layout/tabBar";
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens                                                     */
@@ -53,12 +54,6 @@ const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
 const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
 const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
 
-/**
- * Claymorphism surface system.
- * Every raised element is a two-layer shell: an outer shell casting the soft
- * dark drop shadow (bottom-right) and an inner shell casting the white
- * highlight (top-left). Together they read as a moulded clay slab.
- */
 const CLAY = {
   canvas: "#E8EDF5",
   surface: "#F3F6FB",
@@ -73,7 +68,6 @@ const CLAY = {
   hairline: "rgba(100, 116, 139, 0.12)",
 } as const;
 
-/** Muted, matte accents — no neon, no gradients. */
 const ACCENT = {
   green: "#3E9B62",
   greenSoft: "#DBEFE1",
@@ -191,11 +185,6 @@ function getBucketCount(range: TimeRange): number {
   return range === "30d" ? 6 : range === "6m" ? 6 : 12;
 }
 
-/**
- * Build buckets from a list of events.
- * 30d  -> 6 windows of 5 days
- * 6m/1y -> calendar months
- */
 function bucketize(
   events: { at: string; contributed: number; withdrawn: number; loans: number }[],
   range: TimeRange
@@ -279,7 +268,6 @@ function Clay({
   radius?: number;
   highlight?: string;
   shade?: string;
-  /** 0 = flat chip, 1 = standard card, 2 = hero slab */
   depth?: number;
   style?: StyleProp<ViewStyle>;
   bodyStyle?: StyleProp<ViewStyle>;
@@ -328,6 +316,7 @@ function Clay({
 export default function HomeScreen() {
   const router = useRouter();
   const { theme, setIsNotificationOpen } = useGlobalStorage();
+  const tabBarInset = useTabBarBottomInset();
 
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [refreshing, setRefreshing] = useState(false);
@@ -508,14 +497,6 @@ export default function HomeScreen() {
     return Math.round(((current - previous) / previous) * 100);
   }, [buckets]);
 
-  /**
-   * Ratios.
-   *
-   * NOTE ON DEBT: the platform currently records only liabilities (loans and
-   * their repayments). Assets are not yet tracked, so a debt-to-assets ratio
-   * would be misleading. We therefore report a *debt load* — the share of
-   * everything ever borrowed that is still outstanding. 0% means fully repaid.
-   */
   const ratios = useMemo(() => {
     const denom = rangeTotalIn + walletBalance;
     const savingsRate = denom > 0 ? (rangeTotalIn / denom) * 100 : 0;
@@ -543,9 +524,8 @@ export default function HomeScreen() {
     };
   }, [rangeTotalIn, rangeTotalOut, walletBalance, ledger, range]);
 
-  /* ── Health score (6 signals, 100 pts) ────────────────── */
+  /* ── Health score ─────────────────────────────────────── */
   const health: HealthScore = useMemo(() => {
-    /* Savings progress (0-25) */
     const planProgress =
       mySavingsPlans.length > 0
         ? mySavingsPlans.reduce((sum, p) => {
@@ -562,13 +542,11 @@ export default function HomeScreen() {
         : 0;
     const savingsScore = (planProgress / 100) * 25;
 
-    /* Debt load (0-20) — based on repayment progress only */
     const totalBorrowed = ledger.loansOutstanding + ledger.loansRepaid;
     const repaidRatio =
       totalBorrowed > 0 ? ledger.loansRepaid / totalBorrowed : 1;
     const debtScore = 20 * (0.5 + 0.5 * repaidRatio);
 
-    /* Contribution activity (0-20) */
     const now = Date.now();
     const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
     let recentContributions = 0;
@@ -587,7 +565,6 @@ export default function HomeScreen() {
       recentContributions * 2.5 + Math.min(allContributions * 0.4, 8)
     );
 
-    /* Diversification (0-15) */
     const circleCount = (myGroups?.length ?? 0) + mySaccos.length;
     let divScore = 0;
     if (circleCount >= 1) divScore += 5;
@@ -596,7 +573,6 @@ export default function HomeScreen() {
     if (mySavingsPlans.length > 0) divScore += 3;
     const diversificationScore = Math.min(divScore, 15);
 
-    /* Engagement (0-10) */
     const activeCircles = mySaccos.filter((s) => {
       const myRow = s.members.find((m) => m.group_member_id === memberId);
       if (!myRow) return false;
@@ -608,7 +584,6 @@ export default function HomeScreen() {
     }).length;
     const engagementScore = Math.min(activeCircles * 3 + 2, 10);
 
-    /* Consistency (0-10) */
     const bucketsWithContribs = buckets.filter((b) => b.contributed > 0).length;
     const consistencyScore =
       buckets.length > 0 ? (bucketsWithContribs / buckets.length) * 10 : 0;
@@ -760,7 +735,7 @@ export default function HomeScreen() {
     currencyCode,
   ]);
 
-  /* ── Financial literacy cards (context-aware) ─────────── */
+  /* ── Financial literacy cards ─────────────────────────── */
   const literacy: LiteracyCard[] = useMemo(() => {
     const cards: LiteracyCard[] = [];
 
@@ -1042,7 +1017,6 @@ export default function HomeScreen() {
 
   const hasAttention = pendingInvites.length > 0 || totalPendingApprovals > 0;
 
-  /* ── Chart normalisation ──────────────────────────────── */
   const chartMax = useMemo(() => {
     let m = 0;
     buckets.forEach((b) => {
@@ -1056,7 +1030,10 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarInset + SPACING.xxl },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -1897,11 +1874,6 @@ function BenchmarkRow({
   );
 }
 
-/**
- * Insight card.
- * No iconography — a toned rule, an uppercase category label, a headline and
- * a body sentence. Reads like a written note, not a generated tip.
- */
 function InsightCard({
   insight,
   styles,
@@ -2058,7 +2030,6 @@ function makeStyles(theme: any) {
     scroll: { flex: 1 },
     scrollContent: { paddingBottom: SPACING.xxl },
 
-    /* Header */
     header: {
       flexDirection: "row",
       alignItems: "center",
@@ -2108,7 +2079,6 @@ function makeStyles(theme: any) {
       lineHeight: 12,
     },
 
-    /* Hero */
     heroShell: {
       marginHorizontal: SPACING.xl,
       marginTop: SPACING.sm,
@@ -2201,7 +2171,6 @@ function makeStyles(theme: any) {
       letterSpacing: -0.3,
     },
 
-    /* Segmented control (recessed clay) */
     segmentWrap: {
       flexDirection: "row",
       marginHorizontal: SPACING.xl,
@@ -2231,12 +2200,10 @@ function makeStyles(theme: any) {
     },
     segmentTextActive: { color: theme.primary },
 
-    /* Shared layout */
     block: { marginHorizontal: SPACING.xl, marginTop: SPACING.lg },
     listWrap: { paddingHorizontal: SPACING.xl, gap: SPACING.md },
     cardBody: { padding: SPACING.lg, gap: SPACING.md },
 
-    /* Chart */
     chartHeader: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -2325,7 +2292,6 @@ function makeStyles(theme: any) {
       fontWeight: "600",
     },
 
-    /* Health */
     healthCard: { padding: SPACING.lg, gap: SPACING.md },
     healthRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
     healthRingWrap: {
@@ -2385,7 +2351,6 @@ function makeStyles(theme: any) {
     },
     healthBarFill: { height: "100%", borderRadius: 3 },
 
-    /* Section headers */
     sectionHeader: {
       flexDirection: "row",
       alignItems: "center",
@@ -2415,7 +2380,6 @@ function makeStyles(theme: any) {
       letterSpacing: 0.2,
     },
 
-    /* Ratios */
     ratioRow: {
       flexDirection: "row",
       gap: SPACING.md,
@@ -2451,7 +2415,6 @@ function makeStyles(theme: any) {
       lineHeight: 13,
     },
 
-    /* Goals */
     goalCard: {
       padding: SPACING.lg,
       borderRadius: RADIUS.lg,
@@ -2494,7 +2457,6 @@ function makeStyles(theme: any) {
       fontVariant: ["tabular-nums"],
     },
 
-    /* Benchmarks */
     benchCard: {
       padding: SPACING.lg,
       borderRadius: RADIUS.lg,
@@ -2553,7 +2515,6 @@ function makeStyles(theme: any) {
       fontVariant: ["tabular-nums"],
     },
 
-    /* Insight (no icon) */
     insightCard: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -2584,7 +2545,6 @@ function makeStyles(theme: any) {
       fontWeight: "500",
     },
 
-    /* Literacy (no icon) */
     literacyCard: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -2616,7 +2576,6 @@ function makeStyles(theme: any) {
       fontWeight: "500",
     },
 
-    /* Category breakdown */
     categoryCard: {
       paddingHorizontal: SPACING.lg,
       paddingVertical: SPACING.xs,
@@ -2672,7 +2631,6 @@ function makeStyles(theme: any) {
       textAlign: "right",
     },
 
-    /* Attention */
     attentionRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -2699,7 +2657,6 @@ function makeStyles(theme: any) {
       fontWeight: "500",
     },
 
-    /* Circles */
     circlesList: {
       paddingHorizontal: SPACING.lg,
       paddingVertical: SPACING.xs,
@@ -2734,7 +2691,6 @@ function makeStyles(theme: any) {
       fontWeight: "500",
     },
 
-    /* Empty state */
     emptyCard: {
       padding: SPACING.xl,
       borderRadius: RADIUS.lg,

@@ -36,6 +36,7 @@ import {
   mockUser,
   mockNotifications,
 } from "@/lib/mock_data/profileMocks/user";
+import { useTabBarBottomInset } from "@/lib/layout/tabBar";
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens — balanced claymorphism                             */
@@ -181,6 +182,7 @@ export default function ProfileScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const tabBarInset = useTabBarBottomInset();
 
   const { data: member } = useMemberData();
 
@@ -219,7 +221,10 @@ export default function ProfileScreen() {
     <View style={styles.root}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: tabBarInset + SPACING.lg },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Header row: title + edit ─────────────────── */}

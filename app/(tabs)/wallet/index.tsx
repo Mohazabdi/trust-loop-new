@@ -20,42 +20,50 @@ import { useCallback, useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { toast } from "sonner-native";
+import { useTabBarBottomInset } from "@/lib/layout/tabBar";
+
 export default function MyWalletScreen() {
   const { theme, setIsNotificationOpen } = useGlobalStorage();
-  const queryClient=useQueryClient();
+  const queryClient = useQueryClient();
+  const tabBarInset = useTabBarBottomInset();
+
   const {
     data: member,
     isLoading: memberLoading,
     error: memberError,
-    refetch:memberRefetch
+    refetch: memberRefetch,
   } = useMemberData();
+
   const {
     data: wallet,
     isLoading: walletLoading,
     error: walletError,
-    refetch:walletRefetch
+    refetch: walletRefetch,
   } = useUserWallet(member?.id);
+
   const {
     data: accounts,
     isLoading: accountsLoading,
     error: accountsError,
-    refetch:accountsRefetch
+    refetch: accountsRefetch,
   } = useWalletAccounts(wallet?.wallet_id);
-  const refresh=async()=>{
+
+  const refresh = async () => {
     queryClient.invalidateQueries({
-  queryKey: ["transaction_history"],
-  exact: true
-});
-    await walletRefetch()
-    await accountsRefetch()
-    await memberRefetch()
+      queryKey: ["transaction_history"],
+      exact: true,
+    });
+    await walletRefetch();
+    await accountsRefetch();
+    await memberRefetch();
     await toast("Wallet up to date ", {
       position: "top-center",
       icon: <RotateCcw size={20} color={theme.success} />,
     });
+  };
 
-  }
   const router = useRouter();
+
   const rightAction = useCallback(() => {
     console.log("RightAction");
     setIsNotificationOpen(true);
@@ -69,14 +77,15 @@ export default function MyWalletScreen() {
       console.log(`Error Signing out ${e}`);
     }
   };
-  // console.log(`data Wallet`, wallet);
-  // console.log(`data Accounts`, accounts);
+
   useWalletRealtime(wallet?.wallet_id);
 
   const styles = useMemo(() => MywalletScreenStyles(theme), [theme]);
+
   if (memberLoading)
     return <LoadingScreen message="You made it! securing your profile" />;
   if (memberError) return <ErrorScreen message={memberError.message} />;
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <CustomWalletHeader
@@ -88,9 +97,9 @@ export default function MyWalletScreen() {
         }}
       />
       <ScrollView
-        // stickyHeaderIndices={[0]} // 2. Index 0 makes the first child (Header) sticky
         showsVerticalScrollIndicator={false}
         style={styles.scrollArea}
+        contentContainerStyle={{ paddingBottom: tabBarInset + 16 }}
       >
         <View style={[styles.greetings, { minHeight: SCREEN_HEIGHT * 0.1 }]}>
           <Text
@@ -114,17 +123,16 @@ export default function MyWalletScreen() {
           isLoading={accountsLoading}
           error={accountsError}
         />
-        <RecentActivity 
-        
-        entity_id={member?.id}
-        available_balances={accounts?.map((acc) => acc.available_balance) ?? []}
-             hold_balances={accounts?.map((acc) => acc.hold_balance) ?? []}
-             current_balances={accounts?.map((acc) => acc.current_balance) ?? []}
-             wallet_number={wallet?.wallet_number ?? "User's Personal Wallet"}
-             wallet_name={wallet?.wallet_name ?? "User's Personal Wallet"}
-             currency_symbol={accounts?.[0]?.currency_symbol ?? "ksh"}
-             currency_code={accounts?.[0]?.currency_code ?? "KES"}
-             currency_name={accounts?.[0].currency_name??'kenyan Shiling'}
+        <RecentActivity
+          entity_id={member?.id}
+          available_balances={accounts?.map((acc) => acc.available_balance) ?? []}
+          hold_balances={accounts?.map((acc) => acc.hold_balance) ?? []}
+          current_balances={accounts?.map((acc) => acc.current_balance) ?? []}
+          wallet_number={wallet?.wallet_number ?? "User's Personal Wallet"}
+          wallet_name={wallet?.wallet_name ?? "User's Personal Wallet"}
+          currency_symbol={accounts?.[0]?.currency_symbol ?? "ksh"}
+          currency_code={accounts?.[0]?.currency_code ?? "KES"}
+          currency_name={accounts?.[0]?.currency_name ?? "kenyan Shiling"}
         />
       </ScrollView>
     </SafeAreaView>

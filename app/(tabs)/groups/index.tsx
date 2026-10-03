@@ -41,6 +41,8 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 
+import { useTabBarBottomInset } from "@/lib/layout/tabBar";
+
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
 /* ------------------------------------------------------------------ */
@@ -120,9 +122,7 @@ function Clay({
   radius?: number;
   highlight?: string;
   shade?: string;
-  /** 0 = flat chip, 1 = standard card, 2 = hero slab */
   depth?: number;
-  /** When true, renders a recessed well instead of a raised slab */
   inset?: boolean;
   style?: StyleProp<ViewStyle>;
   bodyStyle?: StyleProp<ViewStyle>;
@@ -208,6 +208,7 @@ export default function GroupIndexPage() {
   const router = useRouter();
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const { theme } = useGlobalStorage();
+  const tabBarInset = useTabBarBottomInset();
 
   const openMessages = () => {
     markMessagesAsSeen();
@@ -853,7 +854,10 @@ export default function GroupIndexPage() {
     <SafeAreaView style={styles.root}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: tabBarInset + SPACING.lg },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -1095,11 +1099,11 @@ export default function GroupIndexPage() {
         )}
       </ScrollView>
 
-      {/* ── FAB ──────────────────────────────────────────── */}
+      {/* ── FAB — lifted above the tab bar ─────────────────── */}
       <TouchableOpacity
         onPress={() => router.push("/(tabs)/groups/create/picker")}
         activeOpacity={0.9}
-        style={styles.fab}
+        style={[styles.fab, { bottom: tabBarInset + 8 }]}
       >
         <Clay
           color={ACCENT.navy}
@@ -1805,11 +1809,10 @@ const styles = StyleSheet.create({
   dotsRow: { flexDirection: "row", gap: 5, alignItems: "center" },
   dot: { height: 6, borderRadius: 3 },
 
-  /* FAB */
+  /* FAB — `bottom` is now supplied inline so it can sit above the tab bar */
   fab: {
     position: "absolute",
     right: SPACING.xl,
-    bottom: 24,
     borderRadius: 29,
   },
   fabBody: {
