@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1280" width="1024" height="1280">
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0.6">
+      <stop offset="0%"   stop-color="#22D3EE"/>
+      <stop offset="45%"  stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- MARK, centered horizontally, upper two-thirds -->
+  <g transform="translate(512 470) scale(1.05) translate(-512 -510)">
+    <g filter="url(#glow)">
+      <g opacity="0.45" fill="none" stroke="url(#grad)" stroke-width="120"
+         stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 162 710 L 162 310 L 322 550 L 482 310 L 482 710"/>
+        <path d="M 542 510
+                 C 542 420, 622 420, 702 510
+                 C 782 600, 862 600, 862 510
+                 C 862 420, 782 420, 702 510
+                 C 622 600, 542 600, 542 510"/>
+      </g>
+      <g fill="none" stroke="url(#grad)" stroke-width="62"
+         stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 162 710 L 162 310 L 322 550 L 482 310 L 482 710"/>
+        <path d="M 542 510
+                 C 542 420, 622 420, 702 510
+                 C 782 600, 862 600, 862 510
+                 C 862 420, 782 420, 702 510
+                 C 622 600, 542 600, 542 510"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- WORDMARK -->
+  <g filter="url(#glow)">
+    <text x="512" y="1050"
+          text-anchor="middle"
+          font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+          font-size="96" font-weight="800" letter-spacing="14"
+          fill="url(#grad)">TRUST LOOP</text>
+  </g>
+
+  <!-- Thin gradient rules on either side, like the reference -->
+  <rect x="120" y="1130" width="280" height="3" fill="url(#grad)" opacity="0.7"/>
+  <rect x="624" y="1130" width="280" height="3" fill="url(#grad)" opacity="0.7"/>
+
+  <!-- Tagline -->
+  <text x="512" y="1190"
+        text-anchor="middle"
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="40" font-weight="600" letter-spacing="8"
+        fill="url(#grad)" opacity="0.72">YOUR CIRCLE, YOUR TRUST</text>
+</svg>

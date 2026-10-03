@@ -1,0 +1,21 @@
+    export interface GroupMemberDataDetail {
+    id:string;
+    group_id:string;
+    group_name:string;
+    group_description:string;
+    group_ref:string;
+    group_visibility:string;
+    group_cover_photo_url:string;
+    max_capacity:string;
+    min_capacity:string;
+    group_status:string;
+    group_updated_at:string;
+    group_created_at:string;
+    member_id:string;
+    first_name:string;
+    last_name:string;
+    member_role:string;
+    group_member_code:string;
+    group_member_status:string;
+    group_member_created_at:string;
+     }

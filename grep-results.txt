@@ -1,0 +1,91 @@
+﻿D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\rotation\index.tsx:482  ->  router.push(`/(tabs)/groups/group/contribute`)}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\chat.tsx:1  ->  // app/(tabs)/groups/group/chat.tsx
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\createRotation.tsx:142  ->  router.push({ pathname: '/(tabs)/groups/group/plans/rotation/myRotations' });
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\depositFunds.tsx:14  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\depositFunds.tsx:15  ->  import { TransferFundsScreenStyles } from "@/styles/wallet_styles/transfer_funds_screen.styles";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\depositFunds.tsx:47  ->  export default function DepositFunds() {
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\depositFunds.tsx:72  ->  const styles = useMemo(() => TransferFundsScreenStyles(theme), [theme]);
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\depositFunds.tsx:82  ->  useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\groupMembers.tsx:127  ->  pathname: "/(tabs)/groups/group/notifications",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\index.tsx:175  ->  pathname: `/(tabs)/groups/group/plans/rotation/myRotations`,
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\index.tsx:195  ->  pathname: `/(tabs)/groups/group/wallet`,
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\index.tsx:211  ->  pathname: `/(tabs)/groups/group/members`,
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\index.tsx:230  ->  pathname: "/(tabs)/groups/group/chat",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\MyRotations.tsx:115  ->  pathname: "/(tabs)/groups/group/plans/rotation/create",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\MyRotations.tsx:121  ->  // router.push("/(tabs)/groups/group/plans/rotation/create")
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\group\_layout.tsx:11  ->  <Stack.Screen name="depositFunds" />
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\groupPreview.tsx:221  ->  pathname: "/(tabs)/groups/group",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\index.tsx:340  ->  pathname: "/(tabs)/groups/preview",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\index.tsx:356  ->  pathname: "/(tabs)/groups/group",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\index.tsx:523  ->  onPress={() => router.push("/(tabs)/groups/create/community")}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\groups\index.tsx:666  ->  onPress={() => router.push("/(tabs)/groups/create/community")}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:92  ->  onPress={() => router.push('/(tabs)/profile/settings')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:156  ->  onPress={() => router.push('/(tabs)/profile/analytics')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:195  ->  onPress={() => router.push('/(tabs)/groups')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:201  ->  onPress={() => router.push('/(tabs)/profile/analytics')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:207  ->  onPress={() => router.push('/(tabs)/profile/transactions')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:217  ->  onPress={() => router.push('/(tabs)/profile/settings')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:224  ->  onPress={() => router.push('/(tabs)/profile/notifications')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:230  ->  onPress={() => router.push('/(tabs)/profile/security')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:236  ->  onPress={() => router.push('/(tabs)/profile/payment-methods')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:242  ->  onPress={() => router.push('/(tabs)/profile/privacy')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:248  ->  onPress={() => router.push('/(tabs)/profile/verification')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:258  ->  onPress={() => router.push('/(tabs)/profile/groups')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:264  ->  onPress={() => router.push('/(tabs)/profile/groups/contributions')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:270  ->  onPress={() => router.push('/(tabs)/profile/groups/withdrawals')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:276  ->  onPress={() => router.push('/(tabs)/profile/groups/investments')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:286  ->  onPress={() => router.push('/(tabs)/profile/help')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:291  ->  onPress={() => router.push('/(tabs)/profile/terms')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\profile\index.tsx:297  ->  onPress={() => router.push('/(tabs)/profile/upgrade')}
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\deposit.tsx:14  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\deposit.tsx:15  ->  import { TransferFundsScreenStyles } from "@/styles/wallet_styles/transfer_funds_screen.styles";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\deposit.tsx:45  ->  export default function DepositFunds() {
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\deposit.tsx:79  ->  const styles = useMemo(() => TransferFundsScreenStyles(theme), [theme]);
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\deposit.tsx:89  ->  useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\deposit.tsx:206  ->  pathname: "/(tabs)/wallet/receipt",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\receipt.tsx:5  ->  import { useTransactionReceipt } from "@/hooks/useTransactionReceipt";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\receipt.tsx:7  ->  import { TransactionReceiptStyles } from "@/styles/wallet_styles/transaction_receipt.styles";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\receipt.tsx:34  ->  export default function TransactionReceipt() {
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\receipt.tsx:49  ->  } = useTransactionReceipt(transaction_id, entity_id);
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\receipt.tsx:53  ->  const styles = useMemo(() => TransactionReceiptStyles(theme), [theme]);
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\transfer.tsx:18  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\transfer.tsx:19  ->  import { TransferFundsScreenStyles } from "@/styles/wallet_styles/transfer_funds_screen.styles";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\transfer.tsx:50  ->  export default function TransferFundsScreen() {
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\transfer.tsx:87  ->  const styles = useMemo(() => TransferFundsScreenStyles(theme), [theme]);
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\transfer.tsx:106  ->  } = useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\transfer.tsx:235  ->  pathname: "/(tabs)/wallet/receipt",
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\withdraw.tsx:16  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\withdraw.tsx:17  ->  import { TransferFundsScreenStyles } from "@/styles/wallet_styles/transfer_funds_screen.styles";
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\withdraw.tsx:46  ->  export default function WithdrawFunds() {
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\withdraw.tsx:76  ->  const styles = useMemo(() => TransferFundsScreenStyles(theme), [theme]);
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\withdraw.tsx:85  ->  useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\app\(tabs)\wallet\withdraw.tsx:202  ->  pathname: "/(tabs)/wallet/receipt",
+D:\progr\project\trust-loop\portfolio\001\app\_layout.tsx:11  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myGroups\groupMyPlansSection.tsx:59  ->  pathname: "/(tabs)/groups/group/plans/rotation",
+D:\progr\project\trust-loop\portfolio\001\components\myGroups\groupMyTimeLineSection.tsx:123  ->  onPress={() => router.push(`/(tabs)/groups/group/plans/rotation/myRotations`)}
+D:\progr\project\trust-loop\portfolio\001\components\myGroups\PlanSettings.tsx:580  ->  router.push('/(tabs)/groups/group/plans/rotation/myRotations');
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\home\recentActivity.tsx:424  ->  pathname: "/(tabs)/wallet/receipt",
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\home\walletActions.tsx:49  ->  onPress={() => router.push("/(tabs)/wallet/deposit")}
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\home\walletActions.tsx:55  ->  onPress={() => router.push("/(tabs)/wallet/transfer")}
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\home\walletActions.tsx:61  ->  onPress={() => router.push("/(tabs)/wallet/withdraw")}
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\bankTab.tsx:4  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\bankTab.tsx:20  ->  } = useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\internalAccountTab.tsx:8  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\internalAccountTab.tsx:18  ->  const { selectedRecipient, setSelectedRecipient } = useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\listOfRecipients.tsx:2  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\listOfRecipients.tsx:59  ->  useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\mobileMoneyTab.tsx:4  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\mobileMoneyTab.tsx:21  ->  } = useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\search.tsx:6  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\search.tsx:46  ->  } = useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\trustloopUsersTab.tsx:13  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\transfer\recipients\trustloopUsersTab.tsx:28  ->  const { selectedRecipient, setSelectedRecipient,setTransactionCategory } = useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\listOfAccounts.tsx:7  ->  import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
+D:\progr\project\trust-loop\portfolio\001\components\myWallet\listOfAccounts.tsx:29  ->  const { selectedAccount, setSelectedAccount } = useTransferFundsStorage();
+D:\progr\project\trust-loop\portfolio\001\hooks\useTransactionReceipt.ts:2  ->  import { TransactionReceipt } from "@/lib/types/transaction_receipt";
+D:\progr\project\trust-loop\portfolio\001\hooks\useTransactionReceipt.ts:4  ->  export function useTransactionReceipt(trans_id?: string, entity_id?: string) {
+D:\progr\project\trust-loop\portfolio\001\hooks\useTransactionReceipt.ts:5  ->  return useQuery<TransactionReceipt>({
+D:\progr\project\trust-loop\portfolio\001\store\useDepositFundsStorage.ts:4  ->  interface DepositFundsState {
+D:\progr\project\trust-loop\portfolio\001\store\useDepositFundsStorage.ts:13  ->  export const useDepositFundsStorage = create<DepositFundsState>((set) => ({
+D:\progr\project\trust-loop\portfolio\001\store\useTransferFundsStorage.ts:12  ->  interface TransferFundsState {
+D:\progr\project\trust-loop\portfolio\001\store\useTransferFundsStorage.ts:33  ->  export const useTransferFundsStorage = create<TransferFundsState>((set) => ({
