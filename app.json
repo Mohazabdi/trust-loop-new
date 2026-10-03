@@ -1,26 +1,26 @@
 {
   "expo": {
     "name": "Trust Loop",
-    "slug": "trust-loop-wallets",
+    "slug": "trust-loop",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/trustloop-logo.png",
-    "scheme": "trustloopwallets",
+    "scheme": "trustloop",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mohazabdi.trustloop"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/trust-loop-foreground.png",
         "backgroundImage": "./assets/images/trust-loop-background.png",
         "monochromeImage": "./assets/images/trust-loop-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.breilerk.trustloopwallets"
+      "package": "com.mohazabdi.trustloop"
     },
     "web": {
       "output": "static",
@@ -31,12 +31,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/trustloop-logo.png",
-          "imageWidth": 200,
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 280,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#0A1130",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0A1130"
           }
         }
       ],
@@ -50,8 +50,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "a5d62ad4-a497-4f64-95c9-47b170f811b5"
+        "projectId": "f0fbcd21-ba2a-4c59-995c-d93b5e08b8e5"
       }
-    }
+    },
+    "owner": "trust-loop"
   }
 }
