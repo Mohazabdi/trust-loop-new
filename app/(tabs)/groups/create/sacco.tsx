@@ -19,11 +19,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  ArrowLeft,
-  BellIcon,
   Building2,
   Check,
   ChevronDown,
+  ChevronLeft,
   ExternalLink,
   MapPin,
   Search,
@@ -33,7 +32,6 @@ import {
 } from "lucide-react-native";
 import { toast } from "sonner-native";
 
-import CustomWalletHeader from "@/components/myWallet/customHeader";
 import { useMemberData } from "@/hooks/useMemberData";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { useSaccoStorage } from "@/store/useSaccoStorage";
@@ -388,12 +386,6 @@ export default function CreateSaccoScreen() {
   /* ── Render ───────────────────────────────────────────── */
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomWalletHeader
-        subTitle="Create a SACCO"
-        leftAction={{ icon: ArrowLeft, action: handleBack }}
-        rightAction={{ icon: BellIcon, action: () => {} }}
-      />
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -403,6 +395,20 @@ export default function CreateSaccoScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* ── Floating back button row ──────────────────── */}
+          <View style={styles.backRow}>
+            <TouchableOpacity
+              onPress={handleBack}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
+              <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+                <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+              </Clay>
+            </TouchableOpacity>
+          </View>
+
           {/* ── Intro ─────────────────────────────────────── */}
           <View style={styles.header}>
             <Text style={styles.eyebrow}>NEW SACCO</Text>
@@ -1049,8 +1055,20 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
 
+  /* Floating back button row */
+  backRow: {
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   /* Intro */
-  header: { paddingTop: SPACING.md, paddingBottom: SPACING.sm, gap: 4 },
+  header: { paddingTop: SPACING.sm, paddingBottom: SPACING.sm, gap: 4 },
   eyebrow: {
     fontSize: 11,
     fontWeight: "800",
@@ -1166,7 +1184,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /* SASRA info shell — soft tinted clay, no icons beyond functional */
+  /* SASRA info shell — soft tinted clay */
   infoShell: {
     borderRadius: RADIUS.md,
   },
@@ -1212,7 +1230,7 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  /* Governance note — muted amber slab */
+  /* Governance note */
   govNote: {
     marginTop: SPACING.md,
     padding: SPACING.md,

@@ -32,7 +32,6 @@ import {
 } from "lucide-react-native";
 import BottomSheet from "@gorhom/bottom-sheet";
 
-import CustomGroupHeader from "@/components/myGroups/customGroupHeader";
 import CustomBottomSheet from "@/components/CustomBottomSheet";
 import CircularProgress from "@/components/myGroups/PieProgress";
 import RotationPlanSettings from "@/components/myGroups/PlanSettings";
@@ -67,6 +66,7 @@ const CLAY = {
   sunken: "#DFE6F0",
   highlight: "#FFFFFF",
   shade: "rgba(148, 163, 184, 0.55)",
+  shadeSoft: "rgba(148, 163, 184, 0.32)",
   ink: "#1E293B",
   inkSoft: "#64748B",
   inkFaint: "#94A3B8",
@@ -637,6 +637,41 @@ export default function RotationDetailScreen() {
 
   const ListHeader = (
     <View>
+      {/* Floating back row */}
+      <View style={styles.backRow}>
+        <TouchableOpacity
+          onPress={handleBack}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+            <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+          </Clay>
+        </TouchableOpacity>
+      </View>
+
+      {/* Title block with floating bell */}
+      <View style={styles.titleBlock}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={styles.eyebrow}>ROTATION PLAN</Text>
+          <Text style={styles.screenTitle} numberOfLines={2}>
+            {rotationPlan?.rotation_name ?? "Rotation"}
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={handleNotifications}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Notifications"
+          style={styles.bellWrap}
+        >
+          <Clay radius={18} depth={1} bodyStyle={styles.bellBody}>
+            <BellIcon size={20} color={CLAY.ink} strokeWidth={2.4} />
+          </Clay>
+        </TouchableOpacity>
+      </View>
+
       {/* Summary card */}
       <Clay style={styles.summaryWrap} bodyStyle={styles.summaryCard}>
         <View style={styles.summaryTopRow}>
@@ -793,12 +828,6 @@ export default function RotationDetailScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomGroupHeader
-        groupName={rotationPlan?.rotation_name ?? "Rotation"}
-        leftAction={{ icon: ChevronLeft, action: handleBack }}
-        rightAction={{ icon: BellIcon, action: handleNotifications }}
-      />
-
       <FlatList
         data={data}
         keyExtractor={keyExtractor}
@@ -935,10 +964,53 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: CLAY.canvas },
   listContent: { paddingBottom: 40 },
 
+  /* Floating back row */
+  backRow: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* Title block with floating bell */
+  titleBlock: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.md,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: CLAY.inkFaint,
+    letterSpacing: 1.2,
+  },
+  screenTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.8,
+    marginTop: 2,
+  },
+  bellWrap: { position: "relative" },
+  bellBody: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   /* Summary card */
   summaryWrap: {
     marginHorizontal: SPACING.xl,
-    marginTop: SPACING.md,
+    marginTop: SPACING.sm,
   },
   summaryCard: {
     padding: SPACING.lg,

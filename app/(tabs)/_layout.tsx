@@ -6,15 +6,25 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 /* ------------------------------------------------------------------ */
-/*  Hide rules — unchanged                                            */
+/*  Tab visibility                                                    */
+/*                                                                    */
+/*  The floating tab bar is only mounted on the four tab roots.       */
+/*  Every nested route — SACCO home, rotation detail, create flows,   */
+/*  wallet transfer, group chat, preview, settings — hides the bar.   */
+/*                                                                    */
+/*  This is a whitelist, not a blacklist: adding a new nested route   */
+/*  hides the bar automatically. You never have to remember to add    */
+/*  it to a list of exceptions.                                       */
 /* ------------------------------------------------------------------ */
 
-const HIDE_TAB_BAR_PATHS = [
-  "/wallet/transfer",
-  "/wallet/deposit",
-  "/wallet/withdraw",
-  "/wallet/receipt",
-];
+const TAB_ROOT_PATHS = ["/", "/wallet", "/groups", "/profile"];
+
+function isTabRoot(pathname: string): boolean {
+  // Strip query strings and hashes, trim trailing slashes, fall back to "/"
+  const clean =
+    pathname.split("?")[0].split("#")[0].replace(/\/+$/, "") || "/";
+  return TAB_ROOT_PATHS.includes(clean);
+}
 
 /* ------------------------------------------------------------------ */
 /*  Design tokens — matched to the rest of the app                    */
@@ -25,15 +35,13 @@ const CLAY = {
   sunken: "#C8D1DF",
   ink: "#1A2438",
   inkSoft: "#4A566B",
-  /** Deeper than the canvas hairline so the capsule edge is actually
-   *  visible against the light canvas behind it. */
   edge: "rgba(71, 85, 105, 0.22)",
 } as const;
 
 const RADIUS = { pill: 22, capsule: 34 } as const;
 
 /* ------------------------------------------------------------------ */
-/*  Custom tab bar                                                    */
+/*  Custom clay tab bar                                               */
 /* ------------------------------------------------------------------ */
 
 function ClayTabBar({
@@ -49,9 +57,6 @@ function ClayTabBar({
   if (hide) return null;
 
   return (
-    // Wrapper gets generous padding on all sides. React Native clips
-    // shadows to the parent's bounding box, so the shadow needs real
-    // space above, below, and to the sides to actually render.
     <View
       pointerEvents="box-none"
       style={[
@@ -59,9 +64,6 @@ function ClayTabBar({
         { paddingBottom: Math.max(insets.bottom, 12) + 8 },
       ]}
     >
-      {/* Single view that carries the shadow, border, and radius.
-          No nested shadow-casting view — that's what was cancelling
-          the shadow before. */}
       <View style={styles.barShell}>
         <View style={styles.barBody}>
           {state.routes.map((route, index) => {
@@ -117,11 +119,9 @@ function ClayTabBar({
                 ]}
               >
                 {isFocused ? (
-                  // Active pill — flat brand slab. No shadow here;
-                  // shadows nested this deep get clipped and muddy.
-                  // The colour contrast alone is enough to read it
-                  // as raised.
-                  <View style={[styles.activePill, { backgroundColor: brand }]}>
+                  <View
+                    style={[styles.activePill, { backgroundColor: brand }]}
+                  >
                     {renderIcon("#FFFFFF")}
                     <Text
                       style={styles.activeLabel}
@@ -160,24 +160,12 @@ function ClayTabBar({
 
 export default function TabLayout() {
   const pathname = usePathname();
-
-  const hideTabBar =
-    HIDE_TAB_BAR_PATHS.some((p) => pathname.includes(p)) ||
-    pathname.includes("/groups/group");
+  const showTabBar = isTabRoot(pathname);
 
   return (
     <Tabs
-      tabBar={(props) => <ClayTabBar {...props} hide={hideTabBar} />}
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          display: hideTabBar ? "none" : "flex",
-          backgroundColor: "transparent",
-          borderTopWidth: 0,
-          elevation: 0,
-          height: 0,
-        },
-      }}
+      tabBar={(props) => <ClayTabBar {...props} hide={!showTabBar} />}
+      screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen
         name="index"
@@ -228,9 +216,6 @@ export default function TabLayout() {
 /* ------------------------------------------------------------------ */
 
 const styles = StyleSheet.create({
-  /* Floating wrapper. Generous padding on every side so the
-     shell's shadow has room to render. React Native clips shadows
-     to the parent bounding box — no padding means no shadow. */
   barWrap: {
     position: "absolute",
     left: 0,
@@ -242,33 +227,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* The capsule. Single view carries the radius, border, and
-     shadow. Nothing sits on top of it that would cancel the
-     shadow out. */
   barShell: {
     width: "100%",
     borderRadius: RADIUS.capsule,
     backgroundColor: CLAY.surface,
-    // Visible edge — this is what makes the capsule read as a
-    // physical object against the light canvas behind it. The
-    // previous hairline (rgba 0.14) was too faint to see.
     borderWidth: 1,
     borderColor: CLAY.edge,
-
-    // iOS shadow. Single source of truth — clean, offset downward
-    // so the capsule appears to float above the page.
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.22,
     shadowRadius: 20,
-
-    // Android shadow. Android renders elevation much weaker than
-    // iOS shadows at the same value, so 14 is roughly equivalent
-    // to the iOS settings above.
     elevation: 14,
   },
 
-  /* Inner row. No shadow, no border, just layout. */
   barBody: {
     flexDirection: "row",
     alignItems: "center",
@@ -278,7 +249,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
 
-  /* Equal-width tap areas. */
   tabTouchable: {
     flex: 1,
     alignItems: "center",
@@ -290,8 +260,6 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  /* Active tab — flat brand pill. The colour contrast is enough
-     to read it as the selected state; no need to stack shadows. */
   activePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -310,7 +278,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
 
-  /* Inactive tab — icon in a recessed well. */
   inactiveWrap: {
     alignItems: "center",
     justifyContent: "center",

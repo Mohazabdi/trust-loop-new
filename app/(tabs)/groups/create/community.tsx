@@ -1,8 +1,7 @@
-import CustomWalletHeader from '@/components/myWallet/customHeader';
 import { useCreateGroup } from '@/hooks/Usecreategroup';
 import { useGlobalStorage } from '@/store/useGlobalStorage';
 import { useRouter } from 'expo-router';
-import { BellIcon, Check, ChevronDown, ChevronLeft, X } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronLeft, X } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -22,7 +21,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 /* ------------------------------------------------------------------ */
-/*  Design tokens — claymorphism system (matches HomeScreen/Groups)   */
+/*  Design tokens — claymorphism system                               */
 /* ------------------------------------------------------------------ */
 
 const CLAY = {
@@ -139,7 +138,6 @@ export default function CreateGroup() {
 
   const { loading, error, createGroup } = useCreateGroup();
 
-  const rightAction = () => {};
   const leftAction = () => router.back();
 
   const [groupName, setGroupName] = useState('');
@@ -149,7 +147,8 @@ export default function CreateGroup() {
   const [minMembers, setMinMembers] = useState('');
   const [maxMembers, setMaxMembers] = useState('');
   const [visibility, setVisibility] = useState<Visibility | null>(null);
-  const [isVisibilityModalVisible, setIsVisibilityModalVisible] = useState(false);
+  const [isVisibilityModalVisible, setIsVisibilityModalVisible] =
+    useState(false);
 
   const currencies: Currency[] = useMemo(
     () => [
@@ -322,11 +321,7 @@ export default function CreateGroup() {
                     </Text>
                     {selected ? (
                       <View style={styles.optionCheck}>
-                        <Check
-                          size={13}
-                          color="#fff"
-                          strokeWidth={3}
-                        />
+                        <Check size={13} color="#fff" strokeWidth={3} />
                       </View>
                     ) : null}
                   </TouchableOpacity>
@@ -343,18 +338,27 @@ export default function CreateGroup() {
   );
 
   return (
-    <SafeAreaView style={styles.root}>
-      <CustomWalletHeader
-        subTitle="Create your group"
-        leftAction={{ icon: ChevronLeft, action: leftAction }}
-        rightAction={{ icon: BellIcon, action: rightAction }}
-      />
-
+    <SafeAreaView style={styles.root} edges={['top']}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* ── Floating back button row ──────────────────── */}
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={leftAction}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+
         {/* Intro */}
         <View style={styles.introBlock}>
           <Text style={styles.introEyebrow}>NEW GROUP</Text>
@@ -487,7 +491,7 @@ export default function CreateGroup() {
           </Field>
         </Clay>
 
-        {/* Helper note — sets expectations for regular users */}
+        {/* Helper note */}
         <View style={styles.helperNote}>
           <Text style={styles.helperText}>
             Public groups appear in Discover and anyone can request to join.
@@ -526,10 +530,7 @@ export default function CreateGroup() {
             activeOpacity={0.9}
             onPress={handleCancel}
             disabled={loading}
-            style={[
-              styles.cancelButton,
-              loading && { opacity: 0.5 },
-            ]}
+            style={[styles.cancelButton, loading && { opacity: 0.5 }]}
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
@@ -567,6 +568,19 @@ export default function CreateGroup() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: CLAY.canvas },
   scrollContent: { paddingBottom: SPACING.xxl },
+
+  /* Floating back row */
+  backRow: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   /* Intro */
   introBlock: {

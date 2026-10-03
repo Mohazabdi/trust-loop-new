@@ -18,15 +18,13 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import {
-  ArrowLeft,
-  BellIcon,
   CalendarRange,
-  ChevronDown,
   Check,
+  ChevronDown,
+  ChevronLeft,
 } from "lucide-react-native";
 import { toast } from "sonner-native";
 
-import CustomWalletHeader from "@/components/myWallet/customHeader";
 import { useCreateRotation, RotationData } from "@/hooks/useCreateRotation";
 import { useUserWallet } from "@/hooks/useUserWallet";
 import { useGroupMemberDetail } from "@/hooks/custom/useGroupMemberDetail";
@@ -34,18 +32,110 @@ import { useMemberData } from "@/hooks/useMemberData";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { useGroupStorage } from "@/store/useGroupStorage";
 
+/* ------------------------------------------------------------------ */
+/*  Design tokens — claymorphism system                               */
+/* ------------------------------------------------------------------ */
+
+const CLAY = {
+  canvas: "#E8EDF5",
+  surface: "#F3F6FB",
+  surfaceRaised: "#F7FAFE",
+  sunken: "#DFE6F0",
+  highlight: "#FFFFFF",
+  shade: "rgba(148, 163, 184, 0.55)",
+  shadeSoft: "rgba(148, 163, 184, 0.32)",
+  ink: "#1E293B",
+  inkSoft: "#64748B",
+  inkFaint: "#94A3B8",
+  hairline: "rgba(100, 116, 139, 0.12)",
+} as const;
+
+const ACCENT = {
+  green: "#3E9B62",
+  greenSoft: "#DBEFE1",
+  red: "#CF6B6B",
+  redSoft: "#FAE3E3",
+  navy: "#4B6FA6",
+  navySoft: "#E1E9F5",
+  amber: "#C08A3E",
+  amberSoft: "#F7EAD8",
+} as const;
+
+const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
 const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
-const RADIUS = { sm: 8, md: 12, lg: 16, xl: 20 } as const;
 const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
 
 type Interval = { id: string; label: string; value: string };
 type OptionItem = { id: string; label: string; value: string };
 
+/* ------------------------------------------------------------------ */
+/*  Clay primitive                                                    */
+/* ------------------------------------------------------------------ */
+
+function Clay({
+  children,
+  color = CLAY.surface,
+  radius = RADIUS.lg,
+  highlight = CLAY.highlight,
+  shade = CLAY.shade,
+  depth = 1,
+  style,
+  bodyStyle,
+}: {
+  children: React.ReactNode;
+  color?: string;
+  radius?: number;
+  highlight?: string;
+  shade?: string;
+  depth?: number;
+  style?: any;
+  bodyStyle?: any;
+}) {
+  const offset = 4 + depth * 2;
+  const drop = offset + 2;
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: color,
+          borderRadius: radius,
+          shadowColor: shade,
+          shadowOffset: { width: drop, height: drop },
+          shadowOpacity: 1,
+          shadowRadius: drop * 1.9,
+          elevation: 3 + depth * 3,
+        },
+        style,
+      ]}
+    >
+      <View
+        style={[
+          {
+            backgroundColor: color,
+            borderRadius: radius,
+            shadowColor: highlight,
+            shadowOffset: { width: -offset, height: -offset },
+            shadowOpacity: 1,
+            shadowRadius: offset * 1.5,
+          },
+          bodyStyle,
+        ]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen                                                            */
+/* ------------------------------------------------------------------ */
+
 export default function CreateRotationScreen() {
   const router = useRouter();
   const { theme } = useGlobalStorage();
   const { groupMemberId: storedGroupMemberId } = useGroupStorage();
-  const styles = useMemo(() => makeStyles(theme), [theme]);
   const params = useLocalSearchParams<{
     group_member_id: string;
     group_id: string;
@@ -207,7 +297,7 @@ export default function CreateRotationScreen() {
   }) => (
     <Text style={styles.fieldLabel}>
       {children}
-      {required ? <Text style={{ color: theme.primary }}> *</Text> : null}
+      {required ? <Text style={styles.required}> *</Text> : null}
     </Text>
   );
 
@@ -226,26 +316,37 @@ export default function CreateRotationScreen() {
       style={styles.dropdown}
     >
       <Text
-        style={[styles.dropdownText, !value && { color: theme.textSecondary }]}
+        style={[styles.dropdownText, !value && styles.dropdownPlaceholder]}
+        numberOfLines={1}
       >
         {value ?? placeholder}
       </Text>
-      <ChevronDown size={16} color={theme.textSecondary} />
+      <ChevronDown size={16} color={CLAY.inkSoft} strokeWidth={2.4} />
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomWalletHeader
-        subTitle="Create rotation"
-        leftAction={{ icon: ArrowLeft, action: handleBack }}
-        rightAction={{ icon: BellIcon, action: () => {} }}
-      />
-
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* ── Floating back button row ──────────────────── */}
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={handleBack}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Intro ─────────────────────────────────────── */}
         <View style={styles.header}>
           <Text style={styles.eyebrow}>NEW PLAN</Text>
           <Text style={styles.title}>Set up a rotation</Text>
@@ -255,142 +356,204 @@ export default function CreateRotationScreen() {
           </Text>
         </View>
 
-        <Text style={styles.groupLabel}>Basics</Text>
-
-        <View style={styles.fieldGroup}>
-          <FieldLabel required>Rotation name</FieldLabel>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Umoja monthly"
-            placeholderTextColor={theme.textSecondary}
-            value={name}
-            onChangeText={setName}
-          />
+        {/* ── Section: Basics ───────────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionMarker} />
+          <Text style={styles.groupLabel}>Basics</Text>
         </View>
 
-        <View style={styles.fieldGroup}>
-          <FieldLabel>Description</FieldLabel>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="What's this rotation for?"
-            placeholderTextColor={theme.textSecondary}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
+        <Clay bodyStyle={styles.card}>
+          <View style={styles.fieldGroup}>
+            <FieldLabel required>Rotation name</FieldLabel>
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={styles.inputWell}
+            >
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Umoja monthly"
+                placeholderTextColor={CLAY.inkFaint}
+                value={name}
+                onChangeText={setName}
+              />
+            </Clay>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <FieldLabel>Description</FieldLabel>
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={[styles.inputWell, styles.textAreaWell]}
+            >
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="What's this rotation for?"
+                placeholderTextColor={CLAY.inkFaint}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </Clay>
+          </View>
+        </Clay>
+
+        {/* ── Section: Schedule ─────────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionMarker} />
+          <Text style={styles.groupLabel}>Schedule</Text>
         </View>
 
-        <Text style={styles.groupLabel}>Schedule</Text>
-
-        <View style={styles.fieldGroup}>
-          <FieldLabel required>Interval</FieldLabel>
-          <DropdownField
-            value={interval?.label}
-            placeholder="Select interval"
-            onPress={() => setShowInterval(true)}
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <FieldLabel required>Start date</FieldLabel>
-          <TouchableOpacity
-            onPress={() => setShowDate(true)}
-            activeOpacity={0.85}
-            style={styles.dropdown}
-          >
-            <CalendarRange size={16} color={theme.primary} />
-            <Text style={styles.dropdownText}>{formatDate(startDate)}</Text>
-          </TouchableOpacity>
-          {showDate ? (
-            <DateTimePicker
-              value={startDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={onDateChange}
-            />
-          ) : null}
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <FieldLabel required>Contribution per cycle</FieldLabel>
-          <TextInput
-            style={styles.input}
-            placeholder="1000"
-            placeholderTextColor={theme.textSecondary}
-            value={contribution}
-            onChangeText={setContribution}
-            keyboardType="numeric"
-          />
-          <Text style={styles.helperText}>
-            Amount each member contributes per cycle
-          </Text>
-        </View>
-
-        <Text style={styles.groupLabel}>Rules</Text>
-
-        <View style={styles.fieldGroup}>
-          <FieldLabel>Low funds handling</FieldLabel>
-          <DropdownField
-            value={lowFunds?.label}
-            placeholder="Select an option"
-            onPress={() => setShowLowFunds(true)}
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <FieldLabel>Disbursement</FieldLabel>
-          <DropdownField
-            value={disbursement?.label}
-            placeholder="Select a method"
-            onPress={() => setShowDisbursement(true)}
-          />
-        </View>
-
-        <View style={styles.fieldRow}>
-          <View style={{ flex: 1 }}>
-            <FieldLabel>Penalty amount</FieldLabel>
-            <TextInput
-              style={styles.input}
-              placeholder="0"
-              placeholderTextColor={theme.textSecondary}
-              value={penalty}
-              onChangeText={setPenalty}
-              keyboardType="numeric"
+        <Clay bodyStyle={styles.card}>
+          <View style={styles.fieldGroup}>
+            <FieldLabel required>Interval</FieldLabel>
+            <DropdownField
+              value={interval?.label}
+              placeholder="Select interval"
+              onPress={() => setShowInterval(true)}
             />
           </View>
-          <View style={{ flex: 1 }}>
-            <FieldLabel>Grace period (days)</FieldLabel>
-            <TextInput
-              style={styles.input}
-              placeholder="3"
-              placeholderTextColor={theme.textSecondary}
-              value={gracePeriod}
-              onChangeText={setGracePeriod}
-              keyboardType="numeric"
-            />
+
+          <View style={styles.fieldGroup}>
+            <FieldLabel required>Start date</FieldLabel>
+            <TouchableOpacity
+              onPress={() => setShowDate(true)}
+              activeOpacity={0.85}
+              style={styles.dropdown}
+            >
+              <CalendarRange size={16} color={theme.primary} strokeWidth={2.4} />
+              <Text style={styles.dropdownText}>{formatDate(startDate)}</Text>
+            </TouchableOpacity>
+            {showDate ? (
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={onDateChange}
+              />
+            ) : null}
           </View>
+
+          <View style={styles.fieldGroup}>
+            <FieldLabel required>Contribution per cycle</FieldLabel>
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={styles.inputWell}
+            >
+              <TextInput
+                style={styles.input}
+                placeholder="1000"
+                placeholderTextColor={CLAY.inkFaint}
+                value={contribution}
+                onChangeText={setContribution}
+                keyboardType="numeric"
+              />
+            </Clay>
+            <Text style={styles.helperText}>
+              Amount each member contributes per cycle
+            </Text>
+          </View>
+        </Clay>
+
+        {/* ── Section: Rules ────────────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionMarker} />
+          <Text style={styles.groupLabel}>Rules</Text>
         </View>
 
+        <Clay bodyStyle={styles.card}>
+          <View style={styles.fieldGroup}>
+            <FieldLabel>Low funds handling</FieldLabel>
+            <DropdownField
+              value={lowFunds?.label}
+              placeholder="Select an option"
+              onPress={() => setShowLowFunds(true)}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <FieldLabel>Disbursement</FieldLabel>
+            <DropdownField
+              value={disbursement?.label}
+              placeholder="Select a method"
+              onPress={() => setShowDisbursement(true)}
+            />
+          </View>
+
+          <View style={styles.fieldRow}>
+            <View style={{ flex: 1 }}>
+              <FieldLabel>Penalty amount</FieldLabel>
+              <Clay
+                radius={RADIUS.md}
+                depth={0}
+                shade={CLAY.shadeSoft}
+                bodyStyle={styles.inputWell}
+              >
+                <TextInput
+                  style={styles.input}
+                  placeholder="0"
+                  placeholderTextColor={CLAY.inkFaint}
+                  value={penalty}
+                  onChangeText={setPenalty}
+                  keyboardType="numeric"
+                />
+              </Clay>
+            </View>
+            <View style={{ flex: 1 }}>
+              <FieldLabel>Grace period (days)</FieldLabel>
+              <Clay
+                radius={RADIUS.md}
+                depth={0}
+                shade={CLAY.shadeSoft}
+                bodyStyle={styles.inputWell}
+              >
+                <TextInput
+                  style={styles.input}
+                  placeholder="3"
+                  placeholderTextColor={CLAY.inkFaint}
+                  value={gracePeriod}
+                  onChangeText={setGracePeriod}
+                  keyboardType="numeric"
+                />
+              </Clay>
+            </View>
+          </View>
+        </Clay>
+
+        {/* ── Actions ───────────────────────────────────── */}
         <View style={styles.actions}>
           <TouchableOpacity
             onPress={handleCreate}
             disabled={mutation.isPending}
-            activeOpacity={0.85}
-            style={[
-              styles.primaryBtn,
-              { opacity: mutation.isPending ? 0.6 : 1 },
-            ]}
+            activeOpacity={0.9}
           >
-            <Text style={styles.primaryBtnText}>
-              {mutation.isPending ? "Creating..." : "Create rotation"}
-            </Text>
+            <Clay
+              color={theme.primary}
+              radius={RADIUS.lg}
+              depth={2}
+              highlight="rgba(255,255,255,0.34)"
+              shade="rgba(12, 45, 22, 0.42)"
+              bodyStyle={[
+                styles.primaryBtn,
+                mutation.isPending && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={styles.primaryBtnText}>
+                {mutation.isPending ? "Creating…" : "Create rotation"}
+              </Text>
+            </Clay>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={handleCancel}
-            activeOpacity={0.85}
+            activeOpacity={0.9}
             style={styles.secondaryBtn}
           >
             <Text style={styles.secondaryBtnText}>Cancel</Text>
@@ -464,7 +627,7 @@ function PickerModal<T extends { id: string; label: string }>({
       onRequestClose={onClose}
     >
       <Pressable style={pickerStyles.overlay} onPress={onClose}>
-        <View style={pickerStyles.card}>
+        <Pressable style={pickerStyles.card} onPress={(e) => e.stopPropagation()}>
           <Text style={pickerStyles.title}>{title}</Text>
           <FlatList
             data={data}
@@ -489,13 +652,15 @@ function PickerModal<T extends { id: string; label: string }>({
                     {item.label}
                   </Text>
                   {selected ? (
-                    <Check size={16} color="#17690c" strokeWidth={3} />
+                    <View style={pickerStyles.optionCheck}>
+                      <Check size={12} color="#fff" strokeWidth={3} />
+                    </View>
                   ) : null}
                 </TouchableOpacity>
               );
             }}
           />
-        </View>
+        </Pressable>
       </Pressable>
     </Modal>
   );
@@ -504,28 +669,40 @@ function PickerModal<T extends { id: string; label: string }>({
 const pickerStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(15,23,42,0.5)",
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
   card: {
     width: "100%",
+    maxWidth: 420,
     maxHeight: "70%",
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    backgroundColor: CLAY.surface,
+    borderRadius: RADIUS.xl,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(71, 85, 105, 0.14)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    elevation: 14,
   },
   title: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "800",
-    color: "#111",
+    color: CLAY.ink,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 12,
     letterSpacing: -0.3,
   },
-  separator: { height: 1, backgroundColor: "rgba(0,0,0,0.06)" },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: CLAY.hairline,
+    marginHorizontal: 20,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -533,124 +710,189 @@ const pickerStyles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
   },
-  rowText: { fontSize: 14.5, fontWeight: "500", color: "#111" },
-  rowTextSelected: { color: "#17690c", fontWeight: "700" },
+  rowText: { fontSize: 14.5, fontWeight: "600", color: CLAY.ink },
+  rowTextSelected: { color: ACCENT.green, fontWeight: "800" },
+  optionCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: ACCENT.green,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
 
 /* ------------------------------------------------------------------ */
 /*  Screen styles                                                     */
 /* ------------------------------------------------------------------ */
 
-function makeStyles(theme: any) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: theme.background },
-    scrollContent: {
-      paddingHorizontal: SPACING.xl,
-      paddingBottom: SPACING.xxl,
-      gap: SPACING.md,
-    },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: CLAY.canvas },
+  scrollContent: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.md,
+  },
 
-    header: {
-      paddingTop: SPACING.lg,
-      paddingBottom: SPACING.md,
-      gap: 4,
-    },
-    eyebrow: {
-      fontSize: TYPE.caption,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      letterSpacing: 1.2,
-    },
-    title: {
-      fontSize: TYPE.h2,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: -0.5,
-    },
-    subtitle: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      lineHeight: 19,
-      marginTop: 2,
-    },
+  /* Floating back row */
+  backRow: {
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    groupLabel: {
-      fontSize: TYPE.caption,
-      fontWeight: "800",
-      color: theme.textSecondary,
-      letterSpacing: 1.2,
-      textTransform: "uppercase",
-      marginTop: SPACING.lg,
-      marginBottom: SPACING.xs,
-    },
+  /* Intro */
+  header: {
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.sm,
+    gap: 4,
+  },
+  eyebrow: {
+    fontSize: TYPE.caption,
+    fontWeight: "800",
+    color: CLAY.inkFaint,
+    letterSpacing: 1.2,
+  },
+  title: {
+    fontSize: TYPE.h2,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.8,
+    marginTop: 2,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: CLAY.inkSoft,
+    lineHeight: 19,
+    marginTop: 4,
+    fontWeight: "500",
+    maxWidth: 340,
+  },
 
-    fieldGroup: { gap: SPACING.sm },
-    fieldRow: { flexDirection: "row", gap: SPACING.md },
-    fieldLabel: {
-      fontSize: TYPE.label,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: 0.2,
-    },
-    helperText: {
-      fontSize: TYPE.caption,
-      color: theme.textSecondary,
-      marginTop: -2,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 14.5,
-      color: theme.text,
-      backgroundColor: theme.surface ?? theme.background,
-    },
-    textArea: { minHeight: 80, paddingTop: 12 },
-    dropdown: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 8,
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: 14,
-      paddingVertical: 13,
-      backgroundColor: theme.surface ?? theme.background,
-    },
-    dropdownText: {
-      fontSize: 14.5,
-      color: theme.text,
-      fontWeight: "500",
-      flex: 1,
-    },
+  /* Section labels */
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: SPACING.xl,
+    marginBottom: -SPACING.xs,
+  },
+  sectionMarker: {
+    width: 4,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: CLAY.ink,
+  },
+  groupLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: CLAY.inkSoft,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
 
-    actions: { marginTop: SPACING.xxl, gap: SPACING.sm },
-    primaryBtn: {
-      paddingVertical: 15,
-      borderRadius: RADIUS.lg,
-      alignItems: "center",
-      backgroundColor: theme.primary,
-    },
-    primaryBtnText: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: "#fff",
-      letterSpacing: 0.2,
-    },
-    secondaryBtn: {
-      paddingVertical: 14,
-      borderRadius: RADIUS.lg,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: `${theme.text}15`,
-    },
-    secondaryBtnText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme.text,
-    },
-  });
-}
+  /* Card wrapping all fields */
+  card: {
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    gap: SPACING.lg,
+  },
+
+  /* Fields */
+  fieldGroup: { gap: 6 },
+  fieldRow: { flexDirection: "row", gap: SPACING.md },
+  fieldLabel: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: CLAY.inkSoft,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  required: { color: ACCENT.red, fontWeight: "800" },
+  helperText: {
+    fontSize: 11.5,
+    color: CLAY.inkSoft,
+    lineHeight: 16,
+    fontWeight: "500",
+    marginTop: -2,
+  },
+
+  /* Recessed input wells */
+  inputWell: {
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.sm,
+    backgroundColor: CLAY.sunken,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CLAY.hairline,
+  },
+  textAreaWell: {
+    paddingVertical: SPACING.md,
+  },
+  input: {
+    fontSize: 14.5,
+    color: CLAY.ink,
+    fontWeight: "600",
+    padding: 0,
+    minHeight: 26,
+  },
+  textArea: {
+    minHeight: 66,
+    textAlignVertical: "top",
+  },
+
+  /* Dropdown */
+  dropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    backgroundColor: CLAY.sunken,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: Platform.OS === "ios" ? 14 : 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CLAY.hairline,
+  },
+  dropdownText: {
+    fontSize: 14.5,
+    color: CLAY.ink,
+    fontWeight: "600",
+    flex: 1,
+  },
+  dropdownPlaceholder: {
+    color: CLAY.inkFaint,
+    fontWeight: "500",
+  },
+
+  /* Actions */
+  actions: { marginTop: SPACING.xxl, gap: SPACING.sm },
+  primaryBtn: {
+    paddingVertical: 15,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.2,
+  },
+  secondaryBtn: {
+    paddingVertical: 15,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    backgroundColor: CLAY.sunken,
+  },
+  secondaryBtnText: {
+    fontSize: 14.5,
+    fontWeight: "700",
+    color: CLAY.ink,
+  },
+});

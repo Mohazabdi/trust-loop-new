@@ -23,7 +23,6 @@ import {
   X,
 } from "lucide-react-native";
 
-import CustomGroupHeader from "@/components/myGroups/customGroupHeader";
 import { useGetGroupMemberRotationPlans } from "@/hooks/useGetGroupMemberRotationPlans";
 import { useGetRotationProgress } from "@/hooks/useGetRotationProgress";
 import { useGroupMemberDetail } from "@/hooks/custom/useGroupMemberDetail";
@@ -42,6 +41,7 @@ const CLAY = {
   sunken: "#DFE6F0",
   highlight: "#FFFFFF",
   shade: "rgba(148, 163, 184, 0.55)",
+  shadeSoft: "rgba(148, 163, 184, 0.32)",
   ink: "#1E293B",
   inkSoft: "#64748B",
   inkFaint: "#94A3B8",
@@ -284,30 +284,17 @@ export default function MyRotationsScreen() {
   }) => {
     const selected = filter === value;
     return (
-      <TouchableOpacity
-        onPress={() => setFilter(value)}
-        activeOpacity={0.9}
-      >
+      <TouchableOpacity onPress={() => setFilter(value)} activeOpacity={0.9}>
         <Clay
           radius={RADIUS.xl}
           depth={0}
           color={selected ? theme.primary : CLAY.surface}
-          highlight={
-            selected ? "rgba(255,255,255,0.34)" : CLAY.highlight
-          }
-          shade={
-            selected ? "rgba(12, 45, 22, 0.32)" : CLAY.shade
-          }
-          bodyStyle={[
-            styles.chip,
-            selected && styles.chipSelected,
-          ]}
+          highlight={selected ? "rgba(255,255,255,0.34)" : CLAY.highlight}
+          shade={selected ? "rgba(12, 45, 22, 0.32)" : CLAY.shade}
+          bodyStyle={[styles.chip, selected && styles.chipSelected]}
         >
           <Text
-            style={[
-              styles.chipText,
-              selected && styles.chipTextSelected,
-            ]}
+            style={[styles.chipText, selected && styles.chipTextSelected]}
           >
             {label}
           </Text>
@@ -359,10 +346,7 @@ export default function MyRotationsScreen() {
           {/* Top row: type badge + status */}
           <View style={styles.cardTopRow}>
             <View
-              style={[
-                styles.typeBadge,
-                { backgroundColor: statusSoft },
-              ]}
+              style={[styles.typeBadge, { backgroundColor: statusSoft }]}
             >
               <RefreshCcw size={11} color={statusColor} strokeWidth={2.6} />
               <Text style={[styles.typeBadgeText, { color: statusColor }]}>
@@ -421,10 +405,7 @@ export default function MyRotationsScreen() {
     <View style={styles.emptyWrap}>
       <Clay bodyStyle={styles.emptyCard}>
         <View
-          style={[
-            styles.emptyIcon,
-            { backgroundColor: ACCENT.navySoft },
-          ]}
+          style={[styles.emptyIcon, { backgroundColor: ACCENT.navySoft }]}
         >
           <RefreshCcw size={26} color={ACCENT.navy} strokeWidth={1.8} />
         </View>
@@ -467,12 +448,6 @@ export default function MyRotationsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomGroupHeader
-        groupName="Rotations"
-        leftAction={{ icon: ChevronLeft, action: handleBack }}
-        rightAction={{ icon: BellIcon, action: handleNotifications }}
-      />
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -486,6 +461,21 @@ export default function MyRotationsScreen() {
           />
         }
       >
+        {/* ── Floating back row ─────────────────────────── */}
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={handleBack}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Header block with floating bell ───────────── */}
         <View style={styles.header}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={styles.eyebrow}>MERRY-GO-ROUND</Text>
@@ -497,28 +487,44 @@ export default function MyRotationsScreen() {
               </Text>
             ) : null}
           </View>
-          {isAdmin ? (
-            <TouchableOpacity
-              onPress={handleCreate}
-              activeOpacity={0.9}
-              accessibilityRole="button"
-              accessibilityLabel="Create rotation plan"
-            >
-              <Clay
-                color={theme.primary}
-                radius={RADIUS.md}
-                depth={1}
-                highlight="rgba(255,255,255,0.34)"
-                shade="rgba(12, 45, 22, 0.42)"
-                bodyStyle={styles.createBtn}
-              >
-                <Plus size={16} color="#fff" strokeWidth={2.6} />
-                <Text style={styles.createBtnText}>Create</Text>
-              </Clay>
-            </TouchableOpacity>
-          ) : null}
+
+          <TouchableOpacity
+            onPress={handleNotifications}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            style={styles.bellWrap}
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.bellBody}>
+              <BellIcon size={20} color={CLAY.ink} strokeWidth={2.4} />
+            </Clay>
+          </TouchableOpacity>
         </View>
 
+        {/* ── Admin create action ───────────────────────── */}
+        {isAdmin ? (
+          <TouchableOpacity
+            onPress={handleCreate}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Create rotation plan"
+            style={styles.createWrap}
+          >
+            <Clay
+              color={theme.primary}
+              radius={RADIUS.lg}
+              depth={1}
+              highlight="rgba(255,255,255,0.34)"
+              shade="rgba(12, 45, 22, 0.42)"
+              bodyStyle={styles.createBtn}
+            >
+              <Plus size={16} color="#fff" strokeWidth={2.6} />
+              <Text style={styles.createBtnText}>Create rotation</Text>
+            </Clay>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* ── Search ────────────────────────────────────── */}
         <View style={styles.searchWrap}>
           <Search size={16} color={CLAY.inkSoft} strokeWidth={2.4} />
           <TextInput
@@ -536,6 +542,7 @@ export default function MyRotationsScreen() {
           ) : null}
         </View>
 
+        {/* ── Filter chips ──────────────────────────────── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -551,6 +558,7 @@ export default function MyRotationsScreen() {
           />
         </ScrollView>
 
+        {/* ── Sections ──────────────────────────────────── */}
         {isLoading ? (
           <View style={styles.loadingWrap}>
             <ActivityIndicator color={theme.primary} />
@@ -603,10 +611,23 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: SPACING.xxl },
 
-  /* Header */
+  /* Floating back row */
+  backRow: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* Header block with floating bell */
   header: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.md,
@@ -631,21 +652,33 @@ const styles = StyleSheet.create({
     color: CLAY.inkSoft,
     marginTop: 2,
   },
+  bellWrap: { position: "relative" },
+  bellBody: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-  /* Create button (clay shell around content) */
+  /* Admin create action */
+  createWrap: {
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.sm,
+  },
   createBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: SPACING.md + 2,
-    paddingVertical: SPACING.sm + 4,
-    borderRadius: RADIUS.md,
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: SPACING.md + 2,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.lg,
   },
   createBtnText: {
-    fontSize: TYPE.label,
+    fontSize: 13,
     fontWeight: "800",
     color: "#fff",
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
   },
 
   /* Search — recessed well */
@@ -654,6 +687,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     marginHorizontal: SPACING.xl,
+    marginTop: SPACING.lg,
     paddingHorizontal: SPACING.md + 2,
     borderRadius: RADIUS.md,
     backgroundColor: CLAY.sunken,

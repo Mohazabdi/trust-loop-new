@@ -15,8 +15,6 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   BellIcon,
-  Calendar,
-  CheckCircle,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -28,9 +26,7 @@ import {
 } from "lucide-react-native";
 import { toast } from "sonner-native";
 
-import CustomGroupHeader from "@/components/myGroups/customGroupHeader";
 import CircularProgress from "@/components/myGroups/PieProgress";
-import { LinearGradient } from "expo-linear-gradient";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { useMemberData } from "@/hooks/useMemberData";
 import { useGroupMemberDetail } from "@/hooks/custom/useGroupMemberDetail";
@@ -40,40 +36,55 @@ import {
 } from "@/store/useSavingsStorage";
 
 /* ------------------------------------------------------------------ */
-/*  Tokens                                                            */
+/*  Design tokens — claymorphism system                               */
 /* ------------------------------------------------------------------ */
 
-const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
-const RADIUS = { sm: 8, md: 12, lg: 16, xl: 20 } as const;
-const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
-
-const SAVINGS = {
-  teal: "#0D9488",
-  tealDeep: "#0F766E",
-  tealDark: "#115E59",
-  mint: "#5EEAD4",
-  mintSoft: "#CCFBF1",
-  growth: "#16A34A",
-  growthSoft: "#DCFCE7",
-  withdrawal: "#DC2626",
-  withdrawalDeep: "#B91C1C",
-  withdrawalSoft: "#FEF2F2",
-  warning: "#D97706",
-  warningSoft: "#FEF3C7",
-  tint: "#F0FDFA",
+const CLAY = {
+  canvas: "#E8EDF5",
+  surface: "#F3F6FB",
+  surfaceRaised: "#F7FAFE",
+  sunken: "#DFE6F0",
+  highlight: "#FFFFFF",
+  shade: "rgba(148, 163, 184, 0.55)",
+  shadeSoft: "rgba(148, 163, 184, 0.32)",
+  ink: "#1E293B",
+  inkSoft: "#64748B",
+  inkFaint: "#94A3B8",
+  hairline: "rgba(100, 116, 139, 0.12)",
 } as const;
+
+/**
+ * Savings-specific muted accent. Same hue as the savings sections
+ * elsewhere in the app, desaturated to sit comfortably on the clay
+ * canvas instead of glowing off it.
+ */
+const SAVINGS = {
+  teal: "#3D9A92",
+  tealSoft: "#DBEFED",
+  tealTint: "#EBF5F4",
+  tealInk: "#2E5C58",
+  mint: "#A7E3DE",
+  growth: "#3E9B62",
+  growthSoft: "#DBEFE1",
+  withdrawal: "#CF6B6B",
+  withdrawalSoft: "#FAE3E3",
+  warning: "#C08A3E",
+  warningSoft: "#F7EAD8",
+  warningInk: "#7A5416",
+  neutral: "#8A93A3",
+  neutralSoft: "#E4E9F1",
+} as const;
+
+const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
+const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
+const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
 
 const STATUS_COLORS: Record<string, string> = {
   active: SAVINGS.teal,
-  draft: "#6B7280",
-  paused: "#D97706",
+  draft: SAVINGS.neutral,
+  paused: SAVINGS.warning,
   completed: SAVINGS.growth,
 };
-
-const tone = (hex: string, a: number) =>
-  `${hex}${Math.round(Math.min(Math.max(a, 0), 1) * 255)
-    .toString(16)
-    .padStart(2, "0")}`;
 
 const formatMoney = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -114,6 +125,66 @@ function projectCompletion(
 const MILESTONES = [25, 50, 75, 100] as const;
 
 /* ------------------------------------------------------------------ */
+/*  Clay primitive                                                    */
+/* ------------------------------------------------------------------ */
+
+function Clay({
+  children,
+  color = CLAY.surface,
+  radius = RADIUS.lg,
+  highlight = CLAY.highlight,
+  shade = CLAY.shade,
+  depth = 1,
+  style,
+  bodyStyle,
+}: {
+  children: React.ReactNode;
+  color?: string;
+  radius?: number;
+  highlight?: string;
+  shade?: string;
+  depth?: number;
+  style?: any;
+  bodyStyle?: any;
+}) {
+  const offset = 4 + depth * 2;
+  const drop = offset + 2;
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: color,
+          borderRadius: radius,
+          shadowColor: shade,
+          shadowOffset: { width: drop, height: drop },
+          shadowOpacity: 1,
+          shadowRadius: drop * 1.9,
+          elevation: 3 + depth * 3,
+        },
+        style,
+      ]}
+    >
+      <View
+        style={[
+          {
+            backgroundColor: color,
+            borderRadius: radius,
+            shadowColor: highlight,
+            shadowOffset: { width: -offset, height: -offset },
+            shadowOpacity: 1,
+            shadowRadius: offset * 1.5,
+          },
+          bodyStyle,
+        ]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Screen                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -126,8 +197,6 @@ export default function SavingsDetailScreen() {
     group_member_id: string;
     member_role: string;
   }>();
-
-  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const plan = useSavingsStorage((s) =>
     s.plans.find((p) => p.savings_plan_id === params.plan_id)
@@ -408,15 +477,25 @@ export default function SavingsDetailScreen() {
   if (!plan) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
-        <CustomGroupHeader
-          groupName="Savings"
-          leftAction={{ icon: ChevronLeft, action: handleBack }}
-          rightAction={{ icon: BellIcon, action: handleNotifications }}
-        />
-        <View style={{ padding: 40, alignItems: "center" }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
-            This savings plan could not be found.
-          </Text>
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={handleBack}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.missingWrap}>
+          <Clay bodyStyle={styles.missingCard}>
+            <Text style={styles.missingTitle}>Savings plan not found</Text>
+            <Text style={styles.missingBody}>
+              This plan is no longer available, or you don't have access to it.
+            </Text>
+          </Clay>
         </View>
       </SafeAreaView>
     );
@@ -425,142 +504,172 @@ export default function SavingsDetailScreen() {
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomGroupHeader
-        groupName={plan.savings_name}
-        leftAction={{ icon: ChevronLeft, action: handleBack }}
-        rightAction={{ icon: BellIcon, action: handleNotifications }}
-      />
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero ──────────────────────────────────────────── */}
-        <View style={styles.heroShadow}>
-          <LinearGradient
-            colors={[SAVINGS.tealDark, SAVINGS.teal, SAVINGS.tealDeep]}
-            locations={[0, 0.55, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.hero}
+        {/* ── Floating back row ─────────────────────────── */}
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={handleBack}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
           >
-            <View style={styles.heroTop}>
-              <View style={styles.heroStatus}>
-                <View
-                  style={[styles.heroStatusDot, { backgroundColor: "#fff" }]}
-                />
-                <Text style={styles.heroStatusText}>{status}</Text>
-              </View>
-
-              <View style={styles.heroTopActions}>
-                {isAdmin ? (
-                  <View style={styles.adminTag}>
-                    <Text style={styles.adminTagText}>ADMIN</Text>
-                  </View>
-                ) : null}
-                <TouchableOpacity
-                  onPress={handleOpenSettings}
-                  hitSlop={10}
-                  accessibilityRole="button"
-                  accessibilityLabel="Plan settings"
-                  style={styles.heroSettingsBtn}
-                >
-                  <Settings2 size={16} color="#fff" strokeWidth={2.2} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.heroBody}>
-              <View style={styles.heroRing}>
-                <CircularProgress
-                  percentage={pct}
-                  size={104}
-                  strokeWidth={9}
-                  color={SAVINGS.mint}
-                  backgroundColor="rgba(255,255,255,0.18)"
-                />
-              </View>
-
-              <View style={styles.heroDetails}>
-                <Text style={styles.heroEyebrow}>Net balance</Text>
-                <Text style={styles.heroAmount} numberOfLines={1}>
-                  {plan.currency_code} {formatMoney(netBalance)}
-                </Text>
-                <Text style={styles.heroTarget}>
-                  of {plan.currency_code} {formatMoney(target)} target
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.heroProgressWrap}>
-              <View style={styles.heroProgressTrack}>
-                <View
-                  style={[styles.heroProgressFill, { width: `${pct}%` }]}
-                />
-              </View>
-              <View style={styles.heroMilestoneRow}>
-                {MILESTONES.map((m) => (
-                  <View key={m} style={styles.heroMilestoneItem}>
-                    <View
-                      style={[
-                        styles.heroMilestoneDot,
-                        pct >= m && styles.heroMilestoneDotReached,
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.heroMilestoneLabel,
-                        pct >= m && { color: "#fff", fontWeight: "700" },
-                      ]}
-                    >
-                      {m}%
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.heroFooter}>
-              <Text style={styles.heroFooterText}>
-                {status === "completed"
-                  ? "Target reached"
-                  : nextMilestone
-                  ? `Next milestone: ${nextMilestone}%`
-                  : "Keep going"}
-              </Text>
-              {projectedDate && status !== "completed" ? (
-                <Text style={styles.heroFooterText}>
-                  Est. {formatDateShort(projectedDate)}
-                </Text>
-              ) : null}
-            </View>
-          </LinearGradient>
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
         </View>
 
-        {/* ── Primary CTA ──────────────────────────────────── */}
+        {/* ── Title block with floating bell ────────────── */}
+        <View style={styles.titleBlock}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.eyebrow}>SAVINGS PLAN</Text>
+            <Text style={styles.screenTitle} numberOfLines={2}>
+              {plan.savings_name}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleNotifications}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            style={styles.bellWrap}
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.bellBody}>
+              <BellIcon size={20} color={CLAY.ink} strokeWidth={2.4} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Hero ──────────────────────────────────────── */}
+        <Clay
+          color={SAVINGS.teal}
+          radius={RADIUS.xl}
+          depth={2}
+          highlight="rgba(255,255,255,0.30)"
+          shade="rgba(30, 70, 66, 0.42)"
+          style={styles.heroWrap}
+          bodyStyle={styles.hero}
+        >
+          <View style={styles.heroTop}>
+            <View style={styles.heroStatus}>
+              <View
+                style={[styles.heroStatusDot, { backgroundColor: "#FFFFFF" }]}
+              />
+              <Text style={styles.heroStatusText}>{status}</Text>
+            </View>
+
+            <View style={styles.heroTopActions}>
+              {isAdmin ? (
+                <View style={styles.adminTag}>
+                  <Text style={styles.adminTagText}>ADMIN</Text>
+                </View>
+              ) : null}
+              <TouchableOpacity
+                onPress={handleOpenSettings}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Plan settings"
+                style={styles.heroSettingsBtn}
+              >
+                <Settings2 size={16} color="#FFFFFF" strokeWidth={2.4} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.heroBody}>
+            <View style={styles.heroRing}>
+              <CircularProgress
+                percentage={pct}
+                size={104}
+                strokeWidth={9}
+                color={SAVINGS.mint}
+                backgroundColor="rgba(255,255,255,0.18)"
+              />
+            </View>
+
+            <View style={styles.heroDetails}>
+              <Text style={styles.heroEyebrow}>Net balance</Text>
+              <Text style={styles.heroAmount} numberOfLines={1}>
+                {plan.currency_code} {formatMoney(netBalance)}
+              </Text>
+              <Text style={styles.heroTarget}>
+                of {plan.currency_code} {formatMoney(target)} target
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.heroProgressWrap}>
+            <View style={styles.heroProgressTrack}>
+              <View
+                style={[styles.heroProgressFill, { width: `${pct}%` }]}
+              />
+            </View>
+            <View style={styles.heroMilestoneRow}>
+              {MILESTONES.map((m) => (
+                <View key={m} style={styles.heroMilestoneItem}>
+                  <View
+                    style={[
+                      styles.heroMilestoneDot,
+                      pct >= m && styles.heroMilestoneDotReached,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.heroMilestoneLabel,
+                      pct >= m && { color: "#FFFFFF", fontWeight: "800" },
+                    ]}
+                  >
+                    {m}%
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.heroFooter}>
+            <Text style={styles.heroFooterText}>
+              {status === "completed"
+                ? "Target reached"
+                : nextMilestone
+                ? `Next milestone: ${nextMilestone}%`
+                : "Keep going"}
+            </Text>
+            {projectedDate && status !== "completed" ? (
+              <Text style={styles.heroFooterText}>
+                Est. {formatDateShort(projectedDate)}
+              </Text>
+            ) : null}
+          </View>
+        </Clay>
+
+        {/* ── Primary CTA ───────────────────────────────── */}
         <View style={styles.actionRow}>
           <TouchableOpacity
             onPress={handleOpenContribute}
-            activeOpacity={0.85}
-            style={styles.primaryBtn}
+            activeOpacity={0.9}
           >
-            <LinearGradient
-              colors={[SAVINGS.teal, SAVINGS.tealDeep]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.primaryBtnGradient}
+            <Clay
+              color={SAVINGS.teal}
+              radius={RADIUS.lg}
+              depth={2}
+              highlight="rgba(255,255,255,0.30)"
+              shade="rgba(30, 70, 66, 0.42)"
+              bodyStyle={styles.primaryBtn}
             >
-              <ArrowUpCircle size={18} color="#fff" strokeWidth={2.2} />
+              <ArrowUpCircle size={18} color="#FFFFFF" strokeWidth={2.4} />
               <Text style={styles.primaryBtnText}>
                 Contribute {plan.currency_code}{" "}
                 {formatMoney(plan.amount_per_contribution)}
               </Text>
-            </LinearGradient>
+            </Clay>
           </TouchableOpacity>
         </View>
 
-        {/* ── Pending approvals banner ─────────────────────── */}
+        {/* ── Pending approvals banner ──────────────────── */}
         {pendingRequestCount > 0 ? (
           <TouchableOpacity
             onPress={
@@ -568,144 +677,163 @@ export default function SavingsDetailScreen() {
                 ? () => handleOpenRequestDetail(myPendingApproval.withdrawal_id)
                 : handleOpenWithdrawals
             }
-            activeOpacity={0.85}
-            style={styles.pendingBanner}
+            activeOpacity={0.9}
+            style={styles.bannerWrap}
           >
-            <View style={styles.pendingBannerIcon}>
-              <Clock size={15} color={SAVINGS.warning} strokeWidth={2.6} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.pendingBannerTitle}>
-                {myPendingApproval
-                  ? "Your approval is needed"
-                  : `${pendingRequestCount} withdrawal request${
-                      pendingRequestCount === 1 ? "" : "s"
-                    } awaiting approval`}
-              </Text>
-              <Text style={styles.pendingBannerMeta} numberOfLines={1}>
-                {plan.currency_code} {formatMoney(pendingAmountTotal)} ·{" "}
-                {latestPendingRequest?.requested_by_name ?? ""}
-              </Text>
-            </View>
-            <ChevronRight size={15} color={SAVINGS.warning} strokeWidth={2.6} />
+            <Clay
+              color={SAVINGS.warningSoft}
+              radius={RADIUS.lg}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={styles.pendingBanner}
+            >
+              <View style={styles.pendingBannerIcon}>
+                <Clock size={15} color={SAVINGS.warning} strokeWidth={2.6} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.pendingBannerTitle}>
+                  {myPendingApproval
+                    ? "Your approval is needed"
+                    : `${pendingRequestCount} withdrawal request${
+                        pendingRequestCount === 1 ? "" : "s"
+                      } awaiting approval`}
+                </Text>
+                <Text style={styles.pendingBannerMeta} numberOfLines={1}>
+                  {plan.currency_code} {formatMoney(pendingAmountTotal)} ·{" "}
+                  {latestPendingRequest?.requested_by_name ?? ""}
+                </Text>
+              </View>
+              <ChevronRight
+                size={15}
+                color={SAVINGS.warning}
+                strokeWidth={2.6}
+              />
+            </Clay>
           </TouchableOpacity>
         ) : null}
 
-        {/* ── Admin quick actions ──────────────────────────── */}
+        {/* ── Admin quick actions ───────────────────────── */}
         {isAdmin ? (
           <View style={styles.adminQuickRow}>
             <TouchableOpacity
               onPress={handleOpenMembers}
-              activeOpacity={0.85}
-              style={styles.adminQuickCard}
+              activeOpacity={0.9}
+              style={{ flex: 1 }}
             >
-              <View
-                style={[
-                  styles.adminQuickIcon,
-                  { backgroundColor: tone(SAVINGS.teal, 0.1) },
-                ]}
-              >
-                <Users size={16} color={SAVINGS.teal} strokeWidth={2.4} />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.adminQuickTitle}>Members</Text>
-                <Text style={styles.adminQuickMeta}>
-                  {activeMembers} active
-                  {pendingMembers > 0 ? ` · ${pendingMembers} pending` : ""}
-                </Text>
-              </View>
-              <ChevronRight
-                size={14}
-                color={theme.textSecondary}
-                style={{ opacity: 0.6 }}
-              />
+              <Clay bodyStyle={styles.adminQuickCard}>
+                <View
+                  style={[
+                    styles.adminQuickIcon,
+                    { backgroundColor: SAVINGS.tealSoft },
+                  ]}
+                >
+                  <Users size={16} color={SAVINGS.teal} strokeWidth={2.4} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.adminQuickTitle}>Members</Text>
+                  <Text style={styles.adminQuickMeta}>
+                    {activeMembers} active
+                    {pendingMembers > 0 ? ` · ${pendingMembers} pending` : ""}
+                  </Text>
+                </View>
+                <ChevronRight
+                  size={14}
+                  color={CLAY.inkFaint}
+                  strokeWidth={2.4}
+                />
+              </Clay>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleRequestWithdrawal}
-              activeOpacity={0.85}
-              style={styles.adminQuickCard}
+              activeOpacity={0.9}
+              style={{ flex: 1 }}
             >
-              <View
-                style={[
-                  styles.adminQuickIcon,
-                  { backgroundColor: SAVINGS.withdrawalSoft },
-                ]}
-              >
-                <ArrowDownCircle
-                  size={16}
-                  color={SAVINGS.withdrawal}
+              <Clay bodyStyle={styles.adminQuickCard}>
+                <View
+                  style={[
+                    styles.adminQuickIcon,
+                    { backgroundColor: SAVINGS.withdrawalSoft },
+                  ]}
+                >
+                  <ArrowDownCircle
+                    size={16}
+                    color={SAVINGS.withdrawal}
+                    strokeWidth={2.4}
+                  />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.adminQuickTitle}>Request withdrawal</Text>
+                  <Text style={styles.adminQuickMeta}>
+                    Needs {quorum} approvals
+                  </Text>
+                </View>
+                <ChevronRight
+                  size={14}
+                  color={CLAY.inkFaint}
                   strokeWidth={2.4}
                 />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.adminQuickTitle}>Request withdrawal</Text>
-                <Text style={styles.adminQuickMeta}>
-                  Needs {quorum} approvals
-                </Text>
-              </View>
-              <ChevronRight
-                size={14}
-                color={theme.textSecondary}
-                style={{ opacity: 0.6 }}
-              />
+              </Clay>
             </TouchableOpacity>
           </View>
         ) : null}
 
-        {/* ── Quorum note ──────────────────────────────────── */}
-        <View style={styles.quorumNote}>
-          <ShieldCheck
-            size={13}
-            color={SAVINGS.tealDark}
-            strokeWidth={2.4}
-          />
-          <Text style={styles.quorumNoteText}>
-            Withdrawals need {quorum} member approval
-            {quorum === 1 ? "" : "s"} before funds are released
-          </Text>
+        {/* ── Quorum note ───────────────────────────────── */}
+        <View style={styles.quorumWrap}>
+          <Clay
+            color={SAVINGS.tealTint}
+            radius={RADIUS.md}
+            depth={0}
+            shade={CLAY.shadeSoft}
+            bodyStyle={styles.quorumNote}
+          >
+            <ShieldCheck
+              size={13}
+              color={SAVINGS.tealInk}
+              strokeWidth={2.4}
+            />
+            <Text style={styles.quorumNoteText}>
+              Withdrawals need {quorum} member approval
+              {quorum === 1 ? "" : "s"} before funds are released
+            </Text>
+          </Clay>
         </View>
 
-        {/* ── Stats row ──────────────────────────────────────── */}
+        {/* ── Stats row ─────────────────────────────────── */}
         <View style={styles.statsRow}>
           <StatBlock
             icon={TrendingUp}
             label="Contributed"
             value={`${formatMoney(grossContributed)}`}
             accent={SAVINGS.growth}
-            theme={theme}
-            styles={styles}
           />
           <StatBlock
             icon={ArrowDownCircle}
             label="Withdrawn"
             value={`${formatMoney(totalWithdrawn)}`}
             accent={totalWithdrawn > 0 ? SAVINGS.withdrawal : undefined}
-            theme={theme}
-            styles={styles}
           />
           <StatBlock
             icon={Repeat}
             label="Frequency"
             value={plan.frequency}
-            theme={theme}
-            styles={styles}
             capitalize
           />
         </View>
 
-        {/* ── Members ────────────────────────────────────────── */}
+        {/* ── Members ───────────────────────────────────── */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionMarker} />
             <Text style={styles.sectionTitle}>Members</Text>
             <View
               style={[
                 styles.sectionCountPill,
-                { backgroundColor: SAVINGS.mintSoft },
+                { backgroundColor: SAVINGS.tealSoft },
               ]}
             >
               <Text
-                style={[styles.sectionCountText, { color: SAVINGS.tealDark }]}
+                style={[styles.sectionCountText, { color: SAVINGS.tealInk }]}
               >
                 {plan.members.length}
               </Text>
@@ -731,14 +859,16 @@ export default function SavingsDetailScreen() {
         </View>
 
         {plan.members.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyCardText}>
-              No members yet.
-              {isAdmin ? " Tap Manage to invite group members." : ""}
-            </Text>
+          <View style={styles.emptyWrap}>
+            <Clay bodyStyle={styles.emptyCard}>
+              <Text style={styles.emptyCardText}>
+                No members yet.
+                {isAdmin ? " Tap Manage to invite group members." : ""}
+              </Text>
+            </Clay>
           </View>
         ) : (
-          <View style={styles.membersList}>
+          <Clay style={styles.listWrap} bodyStyle={styles.membersList}>
             {plan.members.map((m, i) => {
               const isLast = i === plan.members.length - 1;
               const isCreator = m.group_member_id === plan.created_by_id;
@@ -751,7 +881,7 @@ export default function SavingsDetailScreen() {
                   <View
                     style={[
                       styles.memberAvatar,
-                      { backgroundColor: tone(SAVINGS.teal, 0.12) },
+                      { backgroundColor: SAVINGS.tealSoft },
                     ]}
                   >
                     <Text
@@ -787,8 +917,8 @@ export default function SavingsDetailScreen() {
                       styles.memberStatusPill,
                       {
                         backgroundColor: isInvited
-                          ? tone("#D97706", 0.12)
-                          : tone(SAVINGS.growth, 0.12),
+                          ? SAVINGS.warningSoft
+                          : SAVINGS.growthSoft,
                       },
                     ]}
                   >
@@ -796,7 +926,9 @@ export default function SavingsDetailScreen() {
                       style={[
                         styles.memberStatusText,
                         {
-                          color: isInvited ? "#D97706" : SAVINGS.growth,
+                          color: isInvited
+                            ? SAVINGS.warning
+                            : SAVINGS.growth,
                         },
                       ]}
                     >
@@ -806,21 +938,22 @@ export default function SavingsDetailScreen() {
                 </View>
               );
             })}
-          </View>
+          </Clay>
         )}
 
-        {/* ── Fund activity ─────────────────────────────────── */}
+        {/* ── Fund activity ─────────────────────────────── */}
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionMarker} />
             <Text style={styles.sectionTitle}>Fund activity</Text>
             <View
               style={[
                 styles.sectionCountPill,
-                { backgroundColor: SAVINGS.mintSoft },
+                { backgroundColor: SAVINGS.tealSoft },
               ]}
             >
               <Text
-                style={[styles.sectionCountText, { color: SAVINGS.tealDark }]}
+                style={[styles.sectionCountText, { color: SAVINGS.tealInk }]}
               >
                 {ledger.length}
               </Text>
@@ -850,61 +983,66 @@ export default function SavingsDetailScreen() {
         </View>
 
         {/* Money-in / money-out summary */}
-        <View style={styles.flowSummary}>
-          <View style={styles.flowSummaryItem}>
-            <View
-              style={[
-                styles.flowSummaryIcon,
-                { backgroundColor: tone(SAVINGS.growth, 0.12) },
-              ]}
-            >
-              <ArrowUpCircle
-                size={14}
-                color={SAVINGS.growth}
-                strokeWidth={2.4}
-              />
+        <View style={styles.flowSummaryWrap}>
+          <Clay bodyStyle={styles.flowSummary}>
+            <View style={styles.flowSummaryItem}>
+              <View
+                style={[
+                  styles.flowSummaryIcon,
+                  { backgroundColor: SAVINGS.growthSoft },
+                ]}
+              >
+                <ArrowUpCircle
+                  size={14}
+                  color={SAVINGS.growth}
+                  strokeWidth={2.4}
+                />
+              </View>
+              <View style={{ flex: 1, gap: 1 }}>
+                <Text style={styles.flowSummaryLabel}>Total in</Text>
+                <Text style={styles.flowSummaryValue}>
+                  {plan.currency_code} {formatMoney(grossContributed)}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1, gap: 1 }}>
-              <Text style={styles.flowSummaryLabel}>Total in</Text>
-              <Text style={styles.flowSummaryValue}>
-                {plan.currency_code} {formatMoney(grossContributed)}
-              </Text>
-            </View>
-          </View>
 
-          <View style={styles.flowSummaryDivider} />
+            <View style={styles.flowSummaryDivider} />
 
-          <View style={styles.flowSummaryItem}>
-            <View
-              style={[
-                styles.flowSummaryIcon,
-                { backgroundColor: SAVINGS.withdrawalSoft },
-              ]}
-            >
-              <ArrowDownCircle
-                size={14}
-                color={SAVINGS.withdrawal}
-                strokeWidth={2.4}
-              />
+            <View style={styles.flowSummaryItem}>
+              <View
+                style={[
+                  styles.flowSummaryIcon,
+                  { backgroundColor: SAVINGS.withdrawalSoft },
+                ]}
+              >
+                <ArrowDownCircle
+                  size={14}
+                  color={SAVINGS.withdrawal}
+                  strokeWidth={2.4}
+                />
+              </View>
+              <View style={{ flex: 1, gap: 1 }}>
+                <Text style={styles.flowSummaryLabel}>Total out</Text>
+                <Text style={styles.flowSummaryValue}>
+                  {plan.currency_code} {formatMoney(totalWithdrawn)}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1, gap: 1 }}>
-              <Text style={styles.flowSummaryLabel}>Total out</Text>
-              <Text style={styles.flowSummaryValue}>
-                {plan.currency_code} {formatMoney(totalWithdrawn)}
-              </Text>
-            </View>
-          </View>
+          </Clay>
         </View>
 
         {/* Activity ledger */}
         {ledger.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyCardText}>
-              No money movement yet. Tap Contribute to record the first deposit.
-            </Text>
+          <View style={styles.emptyWrap}>
+            <Clay bodyStyle={styles.emptyCard}>
+              <Text style={styles.emptyCardText}>
+                No money movement yet. Tap Contribute to record the first
+                deposit.
+              </Text>
+            </Clay>
           </View>
         ) : (
-          <View style={styles.activityList}>
+          <Clay style={styles.listWrap} bodyStyle={styles.activityList}>
             {[...ledger].reverse().map((c, i, arr) => {
               const isLast = i === arr.length - 1;
               const isIn = c.direction === "in";
@@ -918,7 +1056,7 @@ export default function SavingsDetailScreen() {
                       styles.activityIcon,
                       {
                         backgroundColor: isIn
-                          ? tone(SAVINGS.growth, 0.12)
+                          ? SAVINGS.growthSoft
                           : SAVINGS.withdrawalSoft,
                       },
                     ]}
@@ -952,7 +1090,9 @@ export default function SavingsDetailScreen() {
                     style={[
                       styles.activityAmount,
                       {
-                        color: isIn ? SAVINGS.growth : SAVINGS.withdrawal,
+                        color: isIn
+                          ? SAVINGS.growth
+                          : SAVINGS.withdrawal,
                       },
                     ]}
                   >
@@ -962,21 +1102,29 @@ export default function SavingsDetailScreen() {
                 </View>
               );
             })}
-          </View>
+          </Clay>
         )}
 
         {/* Description */}
         {plan.savings_description ? (
           <View style={styles.descriptionWrap}>
-            <Text style={styles.descriptionLabel}>About this plan</Text>
-            <Text style={styles.descriptionText}>
-              {plan.savings_description}
-            </Text>
+            <Clay
+              color={SAVINGS.tealTint}
+              radius={RADIUS.lg}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={styles.descriptionCard}
+            >
+              <Text style={styles.descriptionLabel}>ABOUT THIS PLAN</Text>
+              <Text style={styles.descriptionText}>
+                {plan.savings_description}
+              </Text>
+            </Clay>
           </View>
         ) : null}
       </ScrollView>
 
-      {/* ── Contribute modal ────────────────────────────────── */}
+      {/* ── Contribute modal ────────────────────────────── */}
       <Modal
         visible={contributeOpen}
         transparent
@@ -987,81 +1135,107 @@ export default function SavingsDetailScreen() {
           style={styles.modalBackdrop}
           onPress={() => setContributeOpen(false)}
         />
-        <View style={styles.modalSheet}>
-          <View style={styles.modalHandle} />
-          <View style={styles.modalHeader}>
-            <View style={{ flex: 1, gap: 3 }}>
-              <Text style={styles.modalEyebrow}>CONTRIBUTE</Text>
-              <Text style={styles.modalTitle}>{plan.savings_name}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setContributeOpen(false)}
-              hitSlop={10}
-            >
-              <Text style={{ color: theme.textSecondary, fontSize: 18 }}>
-                ✕
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.modalHelper}>
-            Recording a contribution moves money from your wallet into the
-            group reserve in the live app.
-          </Text>
-
-          <View style={styles.amountWrap}>
-            <Text style={styles.amountPrefix}>{plan.currency_code}</Text>
-            <TextInput
-              style={styles.amountInput}
-              value={contributeAmount}
-              onChangeText={(v) => {
-                setContributeAmount(v);
-                setContributeError("");
-              }}
-              keyboardType="numeric"
-              placeholder="0"
-              placeholderTextColor={`${theme.text}30`}
-              autoFocus
+        <View style={styles.modalSheetWrap}>
+          <Clay radius={RADIUS.xl} depth={2} bodyStyle={styles.modalSheet}>
+            <View
+              style={[
+                styles.modalHandle,
+                { backgroundColor: SAVINGS.teal },
+              ]}
             />
-          </View>
-          {contributeError ? (
-            <Text style={styles.fieldError}>{contributeError}</Text>
-          ) : null}
 
-          <View style={styles.quickAmounts}>
-            {[1, 2, 5].map((mult) => {
-              const value = plan.amount_per_contribution * mult;
-              return (
-                <TouchableOpacity
-                  key={mult}
-                  onPress={() => setContributeAmount(String(value))}
-                  activeOpacity={0.85}
-                  style={styles.quickChip}
-                >
-                  <Text style={styles.quickChipText}>
-                    {mult}× {formatMoney(value)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={styles.modalEyebrow}>CONTRIBUTE</Text>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  {plan.savings_name}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setContributeOpen(false)}
+                hitSlop={10}
+              >
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-          <TouchableOpacity
-            onPress={handleRecordContribution}
-            activeOpacity={0.85}
-            style={styles.modalPrimaryBtnWrap}
-          >
-            <LinearGradient
-              colors={[SAVINGS.teal, SAVINGS.tealDeep]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.modalPrimaryBtn}
+            <Text style={styles.modalHelper}>
+              Recording a contribution moves money from your wallet into the
+              group reserve in the live app.
+            </Text>
+
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={[
+                styles.amountWrap,
+                contributeError && { borderColor: SAVINGS.withdrawal },
+              ]}
             >
-              <Text style={styles.modalPrimaryBtnText}>
-                Record contribution
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <Text style={styles.amountPrefix}>{plan.currency_code}</Text>
+              <TextInput
+                style={styles.amountInput}
+                value={contributeAmount}
+                onChangeText={(v) => {
+                  setContributeAmount(v);
+                  setContributeError("");
+                }}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={CLAY.inkFaint}
+                autoFocus
+              />
+            </Clay>
+            {contributeError ? (
+              <Text style={styles.fieldError}>{contributeError}</Text>
+            ) : null}
+
+            <View style={styles.quickAmounts}>
+              {[1, 2, 5].map((mult) => {
+                const value = plan.amount_per_contribution * mult;
+                return (
+                  <TouchableOpacity
+                    key={mult}
+                    onPress={() => setContributeAmount(String(value))}
+                    activeOpacity={0.9}
+                    style={{ flex: 1 }}
+                  >
+                    <Clay
+                      color={SAVINGS.tealSoft}
+                      radius={RADIUS.md}
+                      depth={0}
+                      shade={CLAY.shadeSoft}
+                      bodyStyle={styles.quickChip}
+                    >
+                      <Text style={styles.quickChipText}>
+                        {mult}× {formatMoney(value)}
+                      </Text>
+                    </Clay>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              onPress={handleRecordContribution}
+              activeOpacity={0.9}
+              style={{ marginTop: SPACING.lg }}
+            >
+              <Clay
+                color={SAVINGS.teal}
+                radius={RADIUS.lg}
+                depth={1}
+                highlight="rgba(255,255,255,0.30)"
+                shade="rgba(30, 70, 66, 0.42)"
+                bodyStyle={styles.modalPrimaryBtn}
+              >
+                <Text style={styles.modalPrimaryBtnText}>
+                  Record contribution
+                </Text>
+              </Clay>
+            </TouchableOpacity>
+          </Clay>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1076,8 +1250,6 @@ function StatBlock({
   icon: Icon,
   label,
   value,
-  theme,
-  styles,
   accent,
   capitalize,
 }: {
@@ -1088,19 +1260,21 @@ function StatBlock({
   }>;
   label: string;
   value: string;
-  theme: any;
-  styles: any;
   accent?: string;
   capitalize?: boolean;
 }) {
-  const color = accent ?? theme.text;
+  const color = accent ?? CLAY.ink;
   return (
-    <View style={styles.statBlock}>
+    <Clay radius={RADIUS.lg} depth={0} shade={CLAY.shadeSoft} style={{ flex: 1 }} bodyStyle={styles.statBlock}>
       <View
         style={[
           styles.statIconWrap,
           {
-            backgroundColor: accent ? tone(accent, 0.12) : `${theme.text}08`,
+            backgroundColor: accent
+              ? accent === SAVINGS.growth
+                ? SAVINGS.growthSoft
+                : SAVINGS.withdrawalSoft
+              : CLAY.sunken,
           },
         ]}
       >
@@ -1117,7 +1291,7 @@ function StatBlock({
       >
         {label}
       </Text>
-    </View>
+    </Clay>
   );
 }
 
@@ -1125,688 +1299,724 @@ function StatBlock({
 /*  Styles                                                            */
 /* ------------------------------------------------------------------ */
 
-function makeStyles(theme: any) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: theme.background },
-    scroll: { flex: 1 },
-    scrollContent: { paddingBottom: 40 },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: CLAY.canvas },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
 
-    /* Hero */
-    heroShadow: {
-      marginHorizontal: SPACING.xl,
-      marginTop: SPACING.md,
-      borderRadius: RADIUS.xl,
-      backgroundColor: SAVINGS.tealDark,
-      shadowColor: SAVINGS.tealDark,
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.28,
-      shadowRadius: 20,
-      elevation: 8,
-    },
-    hero: {
-      borderRadius: RADIUS.xl,
-      paddingHorizontal: SPACING.lg + 2,
-      paddingTop: SPACING.lg,
-      paddingBottom: SPACING.md + 2,
-      overflow: "hidden",
-    },
-    heroTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    heroStatus: { flexDirection: "row", alignItems: "center", gap: 6 },
-    heroStatusDot: { width: 7, height: 7, borderRadius: 4 },
-    heroStatusText: {
-      fontSize: 11,
-      fontWeight: "800",
-      letterSpacing: 1,
-      textTransform: "uppercase",
-      color: "#fff",
-      opacity: 0.9,
-    },
-    heroTopActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    adminTag: {
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 6,
-      backgroundColor: "rgba(255,255,255,0.18)",
-    },
-    adminTagText: {
-      fontSize: 9,
-      fontWeight: "800",
-      color: "#fff",
-      letterSpacing: 1,
-    },
-    heroSettingsBtn: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: "rgba(255,255,255,0.15)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
+  /* Floating back row */
+  backRow: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    heroBody: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.lg,
-      marginTop: SPACING.lg,
-    },
-    heroRing: {
-      width: 104,
-      height: 104,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    heroDetails: { flex: 1, gap: 2 },
-    heroEyebrow: {
-      fontSize: 10,
-      fontWeight: "800",
-      letterSpacing: 1.2,
-      textTransform: "uppercase",
-      color: "#fff",
-      opacity: 0.6,
-      marginBottom: 4,
-    },
-    heroAmount: {
-      fontSize: 26,
-      fontWeight: "800",
-      letterSpacing: -0.8,
-      color: "#fff",
-      fontVariant: ["tabular-nums"],
-    },
-    heroTarget: {
-      fontSize: 12,
-      color: "#fff",
-      opacity: 0.7,
-      fontWeight: "500",
-      marginTop: 2,
-    },
+  /* Title block with floating bell */
+  titleBlock: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.md,
+  },
+  eyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: CLAY.inkFaint,
+    letterSpacing: 1.2,
+  },
+  screenTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.8,
+    marginTop: 2,
+  },
+  bellWrap: { position: "relative" },
+  bellBody: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    heroProgressWrap: { marginTop: SPACING.lg, gap: SPACING.sm },
-    heroProgressTrack: {
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: "rgba(255,255,255,0.18)",
-      overflow: "hidden",
-    },
-    heroProgressFill: {
-      height: "100%",
-      borderRadius: 3,
-      backgroundColor: SAVINGS.mint,
-    },
-    heroMilestoneRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      paddingHorizontal: 2,
-    },
-    heroMilestoneItem: { alignItems: "center", gap: 3 },
-    heroMilestoneDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: "rgba(255,255,255,0.3)",
-    },
-    heroMilestoneDotReached: { backgroundColor: SAVINGS.mint },
-    heroMilestoneLabel: {
-      fontSize: 10,
-      fontWeight: "600",
-      color: "rgba(255,255,255,0.45)",
-      fontVariant: ["tabular-nums"],
-    },
+  /* Hero */
+  heroWrap: {
+    marginHorizontal: SPACING.xl,
+    marginTop: SPACING.sm,
+  },
+  hero: {
+    borderRadius: RADIUS.xl,
+    paddingHorizontal: SPACING.lg + 2,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.md + 2,
+    overflow: "hidden",
+  },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  heroStatus: { flexDirection: "row", alignItems: "center", gap: 6 },
+  heroStatusDot: { width: 7, height: 7, borderRadius: 4 },
+  heroStatusText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    color: "#FFFFFF",
+    opacity: 0.9,
+  },
+  heroTopActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  adminTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  adminTagText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 1,
+  },
+  heroSettingsBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    heroFooter: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginTop: SPACING.md,
-      paddingTop: SPACING.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: "rgba(255,255,255,0.15)",
-    },
-    heroFooterText: {
-      fontSize: 11.5,
-      fontWeight: "600",
-      color: "#fff",
-      opacity: 0.85,
-    },
+  heroBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.lg,
+    marginTop: SPACING.lg,
+  },
+  heroRing: {
+    width: 104,
+    height: 104,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroDetails: { flex: 1, gap: 2 },
+  heroEyebrow: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: "#FFFFFF",
+    opacity: 0.6,
+    marginBottom: 4,
+  },
+  heroAmount: {
+    fontSize: 26,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    color: "#FFFFFF",
+    fontVariant: ["tabular-nums"],
+  },
+  heroTarget: {
+    fontSize: 12,
+    color: "#FFFFFF",
+    opacity: 0.7,
+    fontWeight: "500",
+    marginTop: 2,
+  },
 
-    /* CTA */
-    actionRow: {
-      paddingHorizontal: SPACING.xl,
-      marginTop: SPACING.lg,
-    },
-    primaryBtn: {
-      borderRadius: RADIUS.lg,
-      shadowColor: SAVINGS.teal,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.22,
-      shadowRadius: 12,
-      elevation: 4,
-    },
-    primaryBtnGradient: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: SPACING.sm,
-      paddingVertical: 15,
-      borderRadius: RADIUS.lg,
-    },
-    primaryBtnText: {
-      fontSize: 14.5,
-      fontWeight: "700",
-      color: "#fff",
-      letterSpacing: 0.2,
-    },
+  heroProgressWrap: { marginTop: SPACING.lg, gap: SPACING.sm },
+  heroProgressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    overflow: "hidden",
+  },
+  heroProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: SAVINGS.mint,
+  },
+  heroMilestoneRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 2,
+  },
+  heroMilestoneItem: { alignItems: "center", gap: 3 },
+  heroMilestoneDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.3)",
+  },
+  heroMilestoneDotReached: { backgroundColor: SAVINGS.mint },
+  heroMilestoneLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.45)",
+    fontVariant: ["tabular-nums"],
+  },
 
-    /* Pending banner */
-    pendingBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      marginHorizontal: SPACING.xl,
-      marginTop: SPACING.md,
-      padding: SPACING.md + 2,
-      borderRadius: RADIUS.lg,
-      backgroundColor: SAVINGS.warningSoft,
-      borderWidth: 1,
-      borderColor: tone(SAVINGS.warning, 0.25),
-    },
-    pendingBannerIcon: {
-      width: 30,
-      height: 30,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: tone(SAVINGS.warning, 0.2),
-    },
-    pendingBannerTitle: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: "#92400E",
-      letterSpacing: -0.1,
-    },
-    pendingBannerMeta: {
-      fontSize: 11,
-      color: "#92400E",
-      fontWeight: "500",
-      opacity: 0.85,
-    },
+  heroFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: SPACING.md,
+    paddingTop: SPACING.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.15)",
+  },
+  heroFooterText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    opacity: 0.85,
+  },
 
-    /* Admin quick actions */
-    adminQuickRow: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-      paddingHorizontal: SPACING.xl,
-      marginTop: SPACING.md,
-    },
-    adminQuickCard: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-      padding: SPACING.md,
-      borderRadius: RADIUS.lg,
-      backgroundColor: theme.surface ?? theme.background,
-      borderWidth: 1,
-      borderColor: `${theme.text}08`,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 1,
-    },
-    adminQuickIcon: {
-      width: 34,
-      height: 34,
-      borderRadius: 11,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    adminQuickTitle: {
-      fontSize: 12.5,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: -0.1,
-    },
-    adminQuickMeta: {
-      fontSize: 10,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
+  /* CTA */
+  actionRow: {
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.lg,
+  },
+  primaryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingVertical: 15,
+    borderRadius: RADIUS.lg,
+  },
+  primaryBtnText: {
+    fontSize: 14.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.1,
+  },
 
-    /* Quorum note */
-    quorumNote: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      marginHorizontal: SPACING.xl,
-      marginTop: SPACING.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm + 2,
-      borderRadius: RADIUS.md,
-      backgroundColor: SAVINGS.mintSoft,
-    },
-    quorumNoteText: {
-      flex: 1,
-      fontSize: 11.5,
-      fontWeight: "600",
-      color: SAVINGS.tealDark,
-      lineHeight: 16,
-    },
+  /* Pending banner */
+  bannerWrap: {
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.md,
+  },
+  pendingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    padding: SPACING.md + 2,
+    borderRadius: RADIUS.lg,
+  },
+  pendingBannerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(192, 138, 62, 0.2)",
+  },
+  pendingBannerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: SAVINGS.warningInk,
+    letterSpacing: -0.1,
+  },
+  pendingBannerMeta: {
+    fontSize: 11.5,
+    color: SAVINGS.warningInk,
+    fontWeight: "500",
+  },
 
-    /* Stats */
-    statsRow: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-      paddingHorizontal: SPACING.xl,
-      marginTop: SPACING.lg,
-    },
-    statBlock: {
-      flex: 1,
-      paddingVertical: SPACING.md,
-      paddingHorizontal: SPACING.sm,
-      borderRadius: RADIUS.lg,
-      backgroundColor: theme.surface ?? theme.background,
-      alignItems: "center",
-      gap: 4,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 1,
-    },
-    statIconWrap: {
-      width: 28,
-      height: 28,
-      borderRadius: 9,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 2,
-    },
-    statValue: {
-      fontSize: 14,
-      fontWeight: "800",
-      letterSpacing: -0.3,
-      fontVariant: ["tabular-nums"],
-    },
-    statLabel: {
-      fontSize: 9.5,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      letterSpacing: 0.6,
-      textTransform: "uppercase",
-    },
+  /* Admin quick actions */
+  adminQuickRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.md,
+  },
+  adminQuickCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+  },
+  adminQuickIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  adminQuickTitle: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.1,
+  },
+  adminQuickMeta: {
+    fontSize: 10.5,
+    color: CLAY.inkSoft,
+    fontWeight: "600",
+  },
 
-    /* Sections */
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: SPACING.xl,
-      marginTop: SPACING.xxl,
-      marginBottom: SPACING.md,
-    },
-    sectionTitleRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    sectionTitle: {
-      fontSize: TYPE.h3,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: -0.3,
-    },
-    sectionCountPill: {
-      minWidth: 26,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-      borderRadius: 10,
-      alignItems: "center",
-    },
-    sectionCountText: {
-      fontSize: 11,
-      fontWeight: "800",
-      fontVariant: ["tabular-nums"],
-    },
-    manageLink: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 3,
-      paddingVertical: 4,
-      paddingHorizontal: 6,
-    },
-    manageLinkText: {
-      fontSize: 12,
-      fontWeight: "800",
-      color: SAVINGS.teal,
-      letterSpacing: 0.2,
-    },
+  /* Quorum note */
+  quorumWrap: {
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.md,
+  },
+  quorumNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: RADIUS.md,
+  },
+  quorumNoteText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: SAVINGS.tealInk,
+    lineHeight: 16,
+  },
 
-    /* Members */
-    membersList: {
-      marginHorizontal: SPACING.xl,
-      borderRadius: RADIUS.lg,
-      backgroundColor: theme.surface ?? theme.background,
-      overflow: "hidden",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 1,
-    },
-    memberRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.md,
-    },
-    rowDivider: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: `${theme.text}10`,
-    },
-    memberAvatar: {
-      width: 38,
-      height: 38,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    memberAvatarText: {
-      fontSize: 13,
-      fontWeight: "800",
-      letterSpacing: 0.4,
-    },
-    nameRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    memberName: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: -0.2,
-      flexShrink: 1,
-    },
-    memberRole: {
-      fontSize: 11,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    creatorPill: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-      backgroundColor: SAVINGS.mintSoft,
-    },
-    creatorPillText: {
-      fontSize: 9,
-      fontWeight: "800",
-      color: SAVINGS.tealDark,
-      letterSpacing: 0.5,
-      textTransform: "uppercase",
-    },
-    memberStatusPill: {
-      paddingHorizontal: 9,
-      paddingVertical: 3,
-      borderRadius: 8,
-    },
-    memberStatusText: {
-      fontSize: 10,
-      fontWeight: "800",
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
-    },
+  /* Stats */
+  statsRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.lg,
+  },
+  statBlock: {
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    gap: 4,
+  },
+  statIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+    fontVariant: ["tabular-nums"],
+  },
+  statLabel: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: CLAY.inkFaint,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
 
-    /* Flow summary */
-    flowSummary: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginHorizontal: SPACING.xl,
-      padding: SPACING.md,
-      borderRadius: RADIUS.lg,
-      backgroundColor: theme.surface ?? theme.background,
-      borderWidth: 1,
-      borderColor: `${theme.text}08`,
-    },
-    flowSummaryItem: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    flowSummaryIcon: {
-      width: 30,
-      height: 30,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    flowSummaryLabel: {
-      fontSize: 9.5,
-      fontWeight: "800",
-      color: theme.textSecondary,
-      letterSpacing: 0.6,
-      textTransform: "uppercase",
-    },
-    flowSummaryValue: {
-      fontSize: 13,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: -0.2,
-      fontVariant: ["tabular-nums"],
-    },
-    flowSummaryDivider: {
-      width: StyleSheet.hairlineWidth,
-      alignSelf: "stretch",
-      backgroundColor: `${theme.text}12`,
-      marginHorizontal: SPACING.md,
-    },
+  /* Sections */
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.xxl,
+    marginBottom: SPACING.md,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sectionMarker: {
+    width: 4,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: CLAY.ink,
+  },
+  sectionTitle: {
+    fontSize: TYPE.h3,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.3,
+  },
+  sectionCountPill: {
+    minWidth: 26,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  sectionCountText: {
+    fontSize: 11,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+  },
+  manageLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  manageLinkText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: SAVINGS.teal,
+    letterSpacing: 0.2,
+  },
 
-    /* Activity list */
-    activityList: {
-      marginHorizontal: SPACING.xl,
-      marginTop: SPACING.md,
-      borderRadius: RADIUS.lg,
-      backgroundColor: theme.surface ?? theme.background,
-      overflow: "hidden",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      elevation: 1,
-    },
-    activityRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.md,
-    },
-    activityIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    activityName: {
-      fontSize: 13.5,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: -0.1,
-    },
-    activityMeta: {
-      fontSize: 11,
-      color: theme.textSecondary,
-      fontWeight: "500",
-    },
-    activityAmount: {
-      fontSize: 13.5,
-      fontWeight: "800",
-      fontVariant: ["tabular-nums"],
-      letterSpacing: -0.2,
-    },
+  /* List wrappers */
+  listWrap: {
+    paddingHorizontal: SPACING.xl,
+  },
 
-    /* Empty */
-    emptyCard: {
-      marginHorizontal: SPACING.xl,
-      padding: SPACING.lg,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderStyle: "dashed",
-      borderColor: `${theme.text}15`,
-      alignItems: "center",
-    },
-    emptyCardText: {
-      fontSize: 12.5,
-      color: theme.textSecondary,
-      textAlign: "center",
-      lineHeight: 18,
-    },
+  /* Members */
+  membersList: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.lg,
+  },
+  memberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+  },
+  rowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: CLAY.hairline,
+  },
+  memberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  memberAvatarText: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  memberName: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  memberRole: {
+    fontSize: 11,
+    color: CLAY.inkSoft,
+    fontWeight: "600",
+  },
+  creatorPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 7,
+    backgroundColor: SAVINGS.tealSoft,
+  },
+  creatorPillText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: SAVINGS.tealInk,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  memberStatusPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  memberStatusText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
 
-    /* Description */
-    descriptionWrap: {
-      marginHorizontal: SPACING.xl,
-      marginTop: SPACING.xxl,
-      padding: SPACING.lg,
-      borderRadius: RADIUS.lg,
-      backgroundColor: SAVINGS.tint,
-    },
-    descriptionLabel: {
-      fontSize: 10,
-      fontWeight: "800",
-      color: SAVINGS.tealDark,
-      letterSpacing: 1.2,
-      textTransform: "uppercase",
-      marginBottom: 6,
-    },
-    descriptionText: {
-      fontSize: 13,
-      color: SAVINGS.tealDark,
-      lineHeight: 19,
-    },
+  /* Flow summary */
+  flowSummaryWrap: {
+    paddingHorizontal: SPACING.xl,
+  },
+  flowSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+  },
+  flowSummaryItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  flowSummaryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  flowSummaryLabel: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: CLAY.inkFaint,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  flowSummaryValue: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.2,
+    fontVariant: ["tabular-nums"],
+  },
+  flowSummaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor: CLAY.hairline,
+    marginHorizontal: SPACING.md,
+  },
 
-    /* Modal */
-    modalBackdrop: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.55)",
-    },
-    modalSheet: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: theme.background,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      paddingHorizontal: SPACING.xl,
-      paddingTop: SPACING.md,
-      paddingBottom: 40,
-    },
-    modalHandle: {
-      alignSelf: "center",
-      width: 40,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: `${theme.text}20`,
-      marginBottom: SPACING.md,
-    },
-    modalHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: SPACING.sm,
-    },
-    modalEyebrow: {
-      fontSize: TYPE.caption,
-      fontWeight: "800",
-      color: SAVINGS.teal,
-      letterSpacing: 1.2,
-    },
-    modalTitle: {
-      fontSize: TYPE.h3 + 2,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: -0.4,
-    },
-    modalHelper: {
-      fontSize: 12.5,
-      color: theme.textSecondary,
-      lineHeight: 18,
-      marginBottom: SPACING.lg,
-    },
-    amountWrap: {
-      flexDirection: "row",
-      alignItems: "baseline",
-      gap: 8,
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      backgroundColor: theme.surface ?? theme.background,
-    },
-    amountPrefix: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      letterSpacing: 0.4,
-    },
-    amountInput: {
-      flex: 1,
-      fontSize: 26,
-      fontWeight: "800",
-      color: theme.text,
-      padding: 0,
-      letterSpacing: -0.6,
-      fontVariant: ["tabular-nums"],
-    },
-    fieldError: {
-      color: "#DC2626",
-      fontSize: 12,
-      marginTop: SPACING.sm,
-    },
-    quickAmounts: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-      marginTop: SPACING.md,
-    },
-    quickChip: {
-      flex: 1,
-      paddingVertical: SPACING.sm + 2,
-      borderRadius: RADIUS.md,
-      backgroundColor: SAVINGS.mintSoft,
-      alignItems: "center",
-    },
-    quickChipText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: SAVINGS.tealDark,
-      fontVariant: ["tabular-nums"],
-    },
-    modalPrimaryBtnWrap: {
-      marginTop: SPACING.lg,
-      borderRadius: RADIUS.lg,
-    },
-    modalPrimaryBtn: {
-      paddingVertical: 15,
-      borderRadius: RADIUS.lg,
-      alignItems: "center",
-    },
-    modalPrimaryBtnText: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: "#fff",
-      letterSpacing: 0.2,
-    },
-  });
-}
+  /* Activity list */
+  activityList: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.lg,
+  },
+  activityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+  },
+  activityIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityName: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: CLAY.ink,
+    letterSpacing: -0.1,
+  },
+  activityMeta: {
+    fontSize: 11,
+    color: CLAY.inkSoft,
+    fontWeight: "600",
+  },
+  activityAmount: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -0.2,
+  },
+
+  /* Empty */
+  emptyWrap: {
+    paddingHorizontal: SPACING.xl,
+  },
+  emptyCard: {
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+  },
+  emptyCardText: {
+    fontSize: 12.5,
+    color: CLAY.inkSoft,
+    textAlign: "center",
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+
+  /* Description */
+  descriptionWrap: {
+    paddingHorizontal: SPACING.xl,
+    marginTop: SPACING.xxl,
+  },
+  descriptionCard: {
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+  },
+  descriptionLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: SAVINGS.tealInk,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  descriptionText: {
+    fontSize: 13,
+    color: SAVINGS.tealInk,
+    lineHeight: 19,
+    fontWeight: "500",
+  },
+
+  /* Missing state */
+  missingWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: SPACING.xl,
+  },
+  missingCard: {
+    padding: SPACING.xl,
+    borderRadius: RADIUS.xl,
+    alignItems: "center",
+    gap: SPACING.sm,
+    width: "100%",
+    maxWidth: 320,
+  },
+  missingTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.3,
+  },
+  missingBody: {
+    fontSize: 13,
+    color: CLAY.inkSoft,
+    textAlign: "center",
+    lineHeight: 19,
+    fontWeight: "500",
+  },
+
+  /* Modal */
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.5)",
+  },
+  modalSheetWrap: {
+    position: "absolute",
+    left: SPACING.sm,
+    right: SPACING.sm,
+    bottom: 0,
+  },
+  modalSheet: {
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+    paddingBottom: 40,
+  },
+  modalHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: SPACING.md,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
+  },
+  modalEyebrow: {
+    fontSize: TYPE.caption,
+    fontWeight: "800",
+    color: SAVINGS.teal,
+    letterSpacing: 1.2,
+  },
+  modalTitle: {
+    fontSize: TYPE.h3 + 2,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.4,
+  },
+  modalClose: {
+    color: CLAY.inkSoft,
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  modalHelper: {
+    fontSize: 12.5,
+    color: CLAY.inkSoft,
+    lineHeight: 18,
+    marginBottom: SPACING.lg,
+    fontWeight: "500",
+  },
+  amountWrap: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: CLAY.sunken,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CLAY.hairline,
+  },
+  amountPrefix: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: CLAY.inkSoft,
+    letterSpacing: 0.4,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 26,
+    fontWeight: "800",
+    color: CLAY.ink,
+    padding: 0,
+    letterSpacing: -0.6,
+    fontVariant: ["tabular-nums"],
+  },
+  fieldError: {
+    color: SAVINGS.withdrawal,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: SPACING.sm,
+  },
+  quickAmounts: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
+  },
+  quickChip: {
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: RADIUS.md,
+    alignItems: "center",
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: SAVINGS.tealInk,
+    fontVariant: ["tabular-nums"],
+  },
+  modalPrimaryBtn: {
+    paddingVertical: 15,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalPrimaryBtnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.1,
+  },
+});

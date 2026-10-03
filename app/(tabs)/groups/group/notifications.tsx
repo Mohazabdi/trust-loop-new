@@ -1,10 +1,8 @@
-import { useGlobalStorage } from "@/store/useGlobalStorage";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import {
   AlertCircle,
   Check,
   CheckCircle,
-  ChevronLeft,
   Clock,
   MessageSquare,
   RefreshCw,
@@ -30,10 +28,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+
 import { useGroupJoinRequests } from "@/hooks/useGroupJoinRequests";
-import { useMemberData } from "@/hooks/useMemberData";
 import { useGroupMembers } from "@/hooks/useGroupMembers";
+import { useMemberData } from "@/hooks/useMemberData";
 import { supabase } from "@/lib/mysupabase/supabase";
 
 /* ------------------------------------------------------------------ */
@@ -210,7 +208,6 @@ function Clay({
 /* ------------------------------------------------------------------ */
 
 export default function GroupNotificationsPage() {
-  const router = useRouter();
   const { group: groupId, groupName: groupNameParam } =
     useLocalSearchParams<{ group: string; groupName: string }>();
 
@@ -234,22 +231,22 @@ export default function GroupNotificationsPage() {
   useFocusEffect(
     useCallback(() => {
       refetchRequests();
-    }, [refetchRequests])
+    }, [refetchRequests]),
   );
 
   const pendingCount = useMemo(
     () => requests.filter((r) => r.request_status === "pending").length,
-    [requests]
+    [requests],
   );
 
   const approvedCount = useMemo(
     () => requests.filter((r) => r.request_status === "approved").length,
-    [requests]
+    [requests],
   );
 
   const rejectedCount = useMemo(
     () => requests.filter((r) => r.request_status === "rejected").length,
-    [requests]
+    [requests],
   );
 
   /* ── Filter ──────────────────────────────────────────────── */
@@ -291,20 +288,17 @@ export default function GroupNotificationsPage() {
     if (!approveTarget || !currentMemberId) return;
     setApproving(true);
     try {
-      const { data, error } = await supabase.rpc(
-        "group_join_request_approve",
-        {
-          p_group_join_request_id: approveTarget.request_id,
-          p_reviewed_by: currentMemberId,
-          p_admin_message: approveMessage.trim(),
-        }
-      );
+      const { error } = await supabase.rpc("group_join_request_approve", {
+        p_group_join_request_id: approveTarget.request_id,
+        p_reviewed_by: currentMemberId,
+        p_admin_message: approveMessage.trim(),
+      });
       if (error) throw new Error(error.message);
       setApproveModalVisible(false);
       refetchRequests();
       Alert.alert(
         "Request Approved",
-        `An invitation has been sent to ${approveTarget.requester_name}. They must accept it to join the group.`
+        `An invitation has been sent to ${approveTarget.requester_name}. They must accept it to join the group.`,
       );
     } catch (err: any) {
       Alert.alert("Error", err.message ?? "Could not approve request.");
@@ -321,20 +315,17 @@ export default function GroupNotificationsPage() {
     if (!rejectTarget || !currentMemberId) return;
     setRejecting(true);
     try {
-      const { data, error } = await supabase.rpc(
-        "group_join_request_reject",
-        {
-          p_group_join_request_id: rejectTarget.request_id,
-          p_reviewed_by: currentMemberId,
-          p_admin_message: rejectReason.trim(),
-        }
-      );
+      const { error } = await supabase.rpc("group_join_request_reject", {
+        p_group_join_request_id: rejectTarget.request_id,
+        p_reviewed_by: currentMemberId,
+        p_admin_message: rejectReason.trim(),
+      });
       if (error) throw new Error(error.message);
       setRejectModalVisible(false);
       refetchRequests();
       Alert.alert(
         "Request Rejected",
-        `${rejectTarget.requester_name}'s request has been rejected and they have been notified.`
+        `${rejectTarget.requester_name}'s request has been rejected and they have been notified.`,
       );
     } catch (err: any) {
       Alert.alert("Error", err.message ?? "Could not reject request.");
@@ -346,7 +337,7 @@ export default function GroupNotificationsPage() {
   /* ── Sections ────────────────────────────────────────────── */
   const sections = useMemo(() => {
     const filtered = requests.filter(
-      (r) => filter === "all" || r.request_status === filter
+      (r) => filter === "all" || r.request_status === filter,
     );
     const pending = filtered.filter((r) => r.request_status === "pending");
     const history = filtered.filter((r) => r.request_status !== "pending");
@@ -360,11 +351,6 @@ export default function GroupNotificationsPage() {
     }
     return out;
   }, [requests, filter]);
-
-  const filteredCount = useMemo(
-    () => sections.reduce((sum, s) => sum + s.data.length, 0),
-    [sections]
-  );
 
   /* ── Request row ─────────────────────────────────────────── */
   const renderRequestRow = ({ item: request }: { item: any }) => {
@@ -438,9 +424,7 @@ export default function GroupNotificationsPage() {
                 />
                 <Text style={styles.noteLabel}>THEIR MESSAGE</Text>
               </View>
-              <Text style={styles.noteQuote}>
-                “{request.request_message}”
-              </Text>
+              <Text style={styles.noteQuote}>“{request.request_message}”</Text>
             </Clay>
           ) : null}
 
@@ -454,10 +438,7 @@ export default function GroupNotificationsPage() {
             >
               <View style={styles.noteLabelRow}>
                 <View
-                  style={[
-                    styles.noteDot,
-                    { backgroundColor: cfg.accent },
-                  ]}
+                  style={[styles.noteDot, { backgroundColor: cfg.accent }]}
                 />
                 <Text style={styles.noteLabel}>YOUR RESPONSE</Text>
               </View>
@@ -472,6 +453,8 @@ export default function GroupNotificationsPage() {
                 onPress={() => openRejectModal(request)}
                 activeOpacity={0.9}
                 style={{ flex: 1 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Reject ${request.requester_name}`}
               >
                 <Clay
                   radius={RADIUS.md}
@@ -488,6 +471,8 @@ export default function GroupNotificationsPage() {
                 onPress={() => openApproveModal(request)}
                 activeOpacity={0.9}
                 style={{ flex: 1 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Approve ${request.requester_name}`}
               >
                 <Clay
                   color={ACCENT.green}
@@ -535,31 +520,27 @@ export default function GroupNotificationsPage() {
   }) => {
     const selected = filter === value;
     return (
-      <TouchableOpacity onPress={() => setFilter(value)} activeOpacity={0.9}>
+      <TouchableOpacity
+        onPress={() => setFilter(value)}
+        activeOpacity={0.9}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={`${label} filter`}
+      >
         <Clay
           radius={RADIUS.xl}
           depth={0}
           color={selected ? ACCENT.navy : CLAY.surface}
-          highlight={
-            selected ? "rgba(255,255,255,0.32)" : CLAY.highlight
-          }
+          highlight={selected ? "rgba(255,255,255,0.32)" : CLAY.highlight}
           shade={selected ? "rgba(15, 30, 60, 0.40)" : CLAY.shadeSoft}
           bodyStyle={styles.chip}
         >
-          <Text
-            style={[
-              styles.chipText,
-              selected && styles.chipTextSelected,
-            ]}
-          >
+          <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
             {label}
           </Text>
           {count !== undefined && count > 0 ? (
             <View
-              style={[
-                styles.chipCount,
-                selected && styles.chipCountSelected,
-              ]}
+              style={[styles.chipCount, selected && styles.chipCountSelected]}
             >
               <Text
                 style={[
@@ -579,36 +560,44 @@ export default function GroupNotificationsPage() {
   /* ── List header ─────────────────────────────────────────── */
   const ListHeader = (
     <View>
+      {/* Intro — replaces the removed top header */}
       <View style={styles.introBlock}>
-        <Text style={styles.eyebrow}>NOTIFICATIONS</Text>
-        <Text style={styles.heading}>Join requests</Text>
+        <View style={styles.introTopRow}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.eyebrow}>NOTIFICATIONS</Text>
+            <Text style={styles.heading} numberOfLines={1}>
+              Join requests
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={refetchRequests}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh requests"
+          >
+            <Clay radius={16} depth={1} bodyStyle={styles.refreshBtn}>
+              <RefreshCw size={17} color={CLAY.ink} strokeWidth={2.4} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sub}>
+          {groupNameParam ? `${groupNameParam} · ` : ""}
           {pendingCount > 0
             ? `${pendingCount} request${pendingCount === 1 ? "" : "s"} waiting for your review.`
             : requests.length > 0
-            ? "No pending requests. Your review history is below."
-            : "Requests to join this group will appear here."}
+              ? "No pending requests. Your review history is below."
+              : "Requests to join this group will appear here."}
         </Text>
       </View>
 
       {requests.length > 0 ? (
         <View style={styles.chipsRow}>
           <FilterChip label="All" value="all" count={requests.length} />
-          <FilterChip
-            label="Pending"
-            value="pending"
-            count={pendingCount}
-          />
-          <FilterChip
-            label="Approved"
-            value="approved"
-            count={approvedCount}
-          />
-          <FilterChip
-            label="Rejected"
-            value="rejected"
-            count={rejectedCount}
-          />
+          <FilterChip label="Pending" value="pending" count={pendingCount} />
+          <FilterChip label="Approved" value="approved" count={approvedCount} />
+          <FilterChip label="Rejected" value="rejected" count={rejectedCount} />
         </View>
       ) : null}
     </View>
@@ -626,6 +615,8 @@ export default function GroupNotificationsPage() {
               onPress={refetchRequests}
               activeOpacity={0.9}
               style={styles.retryWrap}
+              accessibilityRole="button"
+              accessibilityLabel="Retry"
             >
               <Clay
                 color={ACCENT.navy}
@@ -652,8 +643,8 @@ export default function GroupNotificationsPage() {
             </View>
             <Text style={styles.emptyTitle}>No join requests yet</Text>
             <Text style={styles.emptyBody}>
-              When members ask to join this group, you'll review their
-              requests here.
+              When members ask to join this group, you'll review their requests
+              here.
             </Text>
           </Clay>
         </View>
@@ -679,43 +670,6 @@ export default function GroupNotificationsPage() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      {/* ── Header ─────────────────────────────────────── */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.9}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Clay radius={18} depth={1} bodyStyle={styles.headerBtn}>
-            <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
-          </Clay>
-        </TouchableOpacity>
-
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {groupNameParam ? `${groupNameParam}` : "Join requests"}
-          </Text>
-          <Text style={styles.headerSub} numberOfLines={1}>
-            {pendingCount > 0
-              ? `${pendingCount} pending`
-              : "Nothing pending"}
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          onPress={refetchRequests}
-          activeOpacity={0.9}
-          accessibilityRole="button"
-          accessibilityLabel="Refresh"
-        >
-          <Clay radius={18} depth={1} bodyStyle={styles.headerBtn}>
-            <RefreshCw size={18} color={CLAY.ink} strokeWidth={2.4} />
-          </Clay>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Content ────────────────────────────────────── */}
       {isLoading && requests.length === 0 ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={ACCENT.navy} />
@@ -775,14 +729,16 @@ export default function GroupNotificationsPage() {
                 <TouchableOpacity
                   onPress={() => !approving && setApproveModalVisible(false)}
                   hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
                 >
                   <X size={22} color={CLAY.ink} strokeWidth={2.4} />
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.modalBody}>
-                Send a welcome message. They will receive an invitation and
-                must accept it to become a member.
+                Send a welcome message. They will receive an invitation and must
+                accept it to become a member.
               </Text>
 
               <TextInput
@@ -804,9 +760,7 @@ export default function GroupNotificationsPage() {
               />
 
               {approveMessageError ? (
-                <Text style={styles.modalInputError}>
-                  {approveMessageError}
-                </Text>
+                <Text style={styles.modalInputError}>{approveMessageError}</Text>
               ) : null}
 
               <TouchableOpacity
@@ -873,6 +827,8 @@ export default function GroupNotificationsPage() {
                 <TouchableOpacity
                   onPress={() => !rejecting && setRejectModalVisible(false)}
                   hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
                 >
                   <X size={22} color={CLAY.ink} strokeWidth={2.4} />
                 </TouchableOpacity>
@@ -966,44 +922,25 @@ function formatDate(iso: string): string {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: CLAY.canvas },
 
-  /* Header — clay buttons on canvas */
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.md,
-  },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.3,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: CLAY.inkSoft,
-    fontWeight: "600",
-    marginTop: 2,
-  },
+  listContent: { paddingBottom: 40 },
 
-  listContent: {
-    paddingBottom: 40,
-  },
-
-  /* Intro */
+  /* Intro — replaces removed header */
   introBlock: {
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.xl,
     gap: 4,
+  },
+  introTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.md,
+  },
+  refreshBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   eyebrow: {
     fontSize: 11,
@@ -1023,7 +960,7 @@ const styles = StyleSheet.create({
     color: CLAY.inkSoft,
     lineHeight: 19,
     fontWeight: "500",
-    marginTop: 4,
+    marginTop: 6,
     maxWidth: 340,
   },
 
@@ -1117,7 +1054,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     gap: SPACING.md,
   },
-
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
@@ -1182,7 +1118,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Inset note (message / response) */
+  /* Inset note */
   noteCard: {
     padding: SPACING.md,
     borderRadius: RADIUS.md,
@@ -1253,7 +1189,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  /* Empty / error states */
+  /* Empty / error */
   stateWrap: {
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.xl,

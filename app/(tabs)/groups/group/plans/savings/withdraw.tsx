@@ -24,38 +24,54 @@ import {
 } from "lucide-react-native";
 import { toast } from "sonner-native";
 
-import CustomGroupHeader from "@/components/myGroups/customGroupHeader";
-import { LinearGradient } from "expo-linear-gradient";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { useGroupMemberDetail } from "@/hooks/custom/useGroupMemberDetail";
 import { useMemberData } from "@/hooks/useMemberData";
 import { useSavingsStorage } from "@/store/useSavingsStorage";
 
 /* ------------------------------------------------------------------ */
-/*  Tokens                                                            */
+/*  Design tokens — claymorphism system                               */
 /* ------------------------------------------------------------------ */
 
-const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
-const RADIUS = { sm: 8, md: 12, lg: 16, xl: 20 } as const;
-const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
-
-const SAVINGS = {
-  teal: "#0D9488",
-  tealDeep: "#0F766E",
-  tealDark: "#115E59",
-  mintSoft: "#CCFBF1",
-  withdrawal: "#DC2626",
-  withdrawalDeep: "#B91C1C",
-  withdrawalSoft: "#FEF2F2",
-  growth: "#16A34A",
-  warning: "#D97706",
-  warningSoft: "#FEF3C7",
+const CLAY = {
+  canvas: "#E8EDF5",
+  surface: "#F3F6FB",
+  surfaceRaised: "#F7FAFE",
+  sunken: "#DFE6F0",
+  highlight: "#FFFFFF",
+  shade: "rgba(148, 163, 184, 0.55)",
+  shadeSoft: "rgba(148, 163, 184, 0.32)",
+  ink: "#1E293B",
+  inkSoft: "#64748B",
+  inkFaint: "#94A3B8",
+  hairline: "rgba(100, 116, 139, 0.12)",
 } as const;
 
-const tone = (hex: string, a: number) =>
-  `${hex}${Math.round(Math.min(Math.max(a, 0), 1) * 255)
-    .toString(16)
-    .padStart(2, "0")}`;
+/**
+ * Savings-specific muted accent plus withdrawal-specific tones.
+ * Same hues used on the Savings Detail and Members screens, desaturated
+ * to sit comfortably on the clay canvas instead of glowing off it.
+ */
+const SAVINGS = {
+  teal: "#3D9A92",
+  tealSoft: "#DBEFED",
+  tealTint: "#EBF5F4",
+  tealInk: "#2E5C58",
+  mint: "#A7E3DE",
+  growth: "#3E9B62",
+  growthSoft: "#DBEFE1",
+  withdrawal: "#CF6B6B",
+  withdrawalSoft: "#FAE3E3",
+  withdrawalTint: "#FCF0F0",
+  withdrawalInk: "#7A3535",
+  warning: "#C08A3E",
+  warningSoft: "#F7EAD8",
+  warningInk: "#7A5416",
+} as const;
+
+const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
+const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
+const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
 
 const formatMoney = (n: number) =>
   n.toLocaleString("en-US", { maximumFractionDigits: 0 });
@@ -71,20 +87,78 @@ const REASONS = [
 type ReasonId = (typeof REASONS)[number]["id"];
 
 /* ------------------------------------------------------------------ */
+/*  Clay primitive                                                    */
+/* ------------------------------------------------------------------ */
+
+function Clay({
+  children,
+  color = CLAY.surface,
+  radius = RADIUS.lg,
+  highlight = CLAY.highlight,
+  shade = CLAY.shade,
+  depth = 1,
+  style,
+  bodyStyle,
+}: {
+  children: React.ReactNode;
+  color?: string;
+  radius?: number;
+  highlight?: string;
+  shade?: string;
+  depth?: number;
+  style?: any;
+  bodyStyle?: any;
+}) {
+  const offset = 4 + depth * 2;
+  const drop = offset + 2;
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: color,
+          borderRadius: radius,
+          shadowColor: shade,
+          shadowOffset: { width: drop, height: drop },
+          shadowOpacity: 1,
+          shadowRadius: drop * 1.9,
+          elevation: 3 + depth * 3,
+        },
+        style,
+      ]}
+    >
+      <View
+        style={[
+          {
+            backgroundColor: color,
+            borderRadius: radius,
+            shadowColor: highlight,
+            shadowOffset: { width: -offset, height: -offset },
+            shadowOpacity: 1,
+            shadowRadius: offset * 1.5,
+          },
+          bodyStyle,
+        ]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Screen                                                            */
 /* ------------------------------------------------------------------ */
 
 export default function SavingsWithdrawScreen() {
   const router = useRouter();
-  const { theme, setIsNotificationOpen } = useGlobalStorage();
+  const { setIsNotificationOpen } = useGlobalStorage();
   const params = useLocalSearchParams<{
     plan_id: string;
     group_id: string;
     group_member_id: string;
     member_role: string;
   }>();
-
-  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const plan = useSavingsStorage((s) =>
     s.plans.find((p) => p.savings_plan_id === params.plan_id)
@@ -157,7 +231,9 @@ export default function SavingsWithdrawScreen() {
 
     if (exceedsBalance) {
       setError(
-        `Exceeds available balance of ${plan.currency_code} ${formatMoney(availableBalance)}.`
+        `Exceeds available balance of ${plan.currency_code} ${formatMoney(
+          availableBalance
+        )}.`
       );
       return;
     }
@@ -172,7 +248,7 @@ export default function SavingsWithdrawScreen() {
     if (!quorumReachable) {
       Alert.alert(
         "Not enough approvers",
-        `This plan needs ${quorum} approvals, but only ${availableApprovers} other members are active. Invite more members first.`,
+        `This plan needs ${quorum} approvals, but only ${availableApprovers} other members are active. Invite more members first.`
       );
       return;
     }
@@ -210,15 +286,25 @@ export default function SavingsWithdrawScreen() {
   if (!plan) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
-        <CustomGroupHeader
-          groupName="Withdraw"
-          leftAction={{ icon: ChevronLeft, action: handleBack }}
-          rightAction={{ icon: BellIcon, action: handleNotifications }}
-        />
-        <View style={{ padding: 40, alignItems: "center" }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
-            This savings plan could not be found.
-          </Text>
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={handleBack}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.missingWrap}>
+          <Clay bodyStyle={styles.missingCard}>
+            <Text style={styles.missingTitle}>Plan not found</Text>
+            <Text style={styles.missingBody}>
+              This savings plan is no longer available.
+            </Text>
+          </Clay>
         </View>
       </SafeAreaView>
     );
@@ -227,12 +313,6 @@ export default function SavingsWithdrawScreen() {
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomGroupHeader
-        groupName="Request withdrawal"
-        leftAction={{ icon: ChevronLeft, action: handleBack }}
-        rightAction={{ icon: BellIcon, action: handleNotifications }}
-      />
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -243,23 +323,51 @@ export default function SavingsWithdrawScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.eyebrow}>WITHDRAWAL REQUEST</Text>
-            <Text style={styles.title}>{plan.savings_name}</Text>
-            <Text style={styles.subtitle}>
-              Submit a request. It will be released once {quorum} members
-              approve it.
-            </Text>
+          {/* ── Floating back row ──────────────────────── */}
+          <View style={styles.backRow}>
+            <TouchableOpacity
+              onPress={handleBack}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
+              <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+                <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+              </Clay>
+            </TouchableOpacity>
           </View>
 
-          {/* Balance card */}
-          <LinearGradient
-            colors={[SAVINGS.withdrawalSoft, "#FFF7F7", SAVINGS.withdrawalSoft]}
-            locations={[0, 0.5, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.balanceCard}
+          {/* ── Title block with floating bell ─────────── */}
+          <View style={styles.titleBlock}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={styles.eyebrow}>WITHDRAWAL REQUEST</Text>
+              <Text style={styles.title} numberOfLines={2}>
+                {plan.savings_name}
+              </Text>
+              <Text style={styles.subtitle}>
+                Submit a request. It will be released once {quorum} members
+                approve it.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleNotifications}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+              style={styles.bellWrap}
+            >
+              <Clay radius={18} depth={1} bodyStyle={styles.bellBody}>
+                <BellIcon size={20} color={CLAY.ink} strokeWidth={2.4} />
+              </Clay>
+            </TouchableOpacity>
+          </View>
+
+          {/* ── Balance slab ───────────────────────────── */}
+          <Clay
+            color={SAVINGS.withdrawalTint}
+            radius={RADIUS.xl}
+            depth={1}
+            bodyStyle={styles.balanceCard}
           >
             <View style={styles.balanceTop}>
               <View style={styles.balanceBadge}>
@@ -289,29 +397,30 @@ export default function SavingsWithdrawScreen() {
             ) : (
               <Text style={styles.balanceMeta}>No pending requests</Text>
             )}
-          </LinearGradient>
+          </Clay>
 
-          {/* Quorum banner */}
-          <View
-            style={[
-              styles.quorumBox,
-              {
-                backgroundColor: quorumReachable
-                  ? SAVINGS.mintSoft
-                  : SAVINGS.warningSoft,
-              },
-            ]}
+          {/* ── Quorum banner ──────────────────────────── */}
+          <Clay
+            color={
+              quorumReachable ? SAVINGS.tealTint : SAVINGS.warningSoft
+            }
+            radius={RADIUS.md}
+            depth={0}
+            shade={CLAY.shadeSoft}
+            bodyStyle={styles.quorumBox}
           >
             <ShieldCheck
               size={16}
-              color={quorumReachable ? SAVINGS.tealDark : SAVINGS.warning}
+              color={quorumReachable ? SAVINGS.tealInk : SAVINGS.warning}
               strokeWidth={2.4}
             />
             <Text
               style={[
                 styles.quorumText,
                 {
-                  color: quorumReachable ? SAVINGS.tealDark : SAVINGS.warning,
+                  color: quorumReachable
+                    ? SAVINGS.tealInk
+                    : SAVINGS.warningInk,
                 },
               ]}
             >
@@ -319,15 +428,18 @@ export default function SavingsWithdrawScreen() {
                 ? `Needs ${quorum} approvals from ${availableApprovers} members`
                 : `Not enough active members. Need ${quorum} approvers.`}
             </Text>
-          </View>
+          </Clay>
 
-          {/* Amount */}
+          {/* ── Amount ─────────────────────────────────── */}
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Amount to withdraw</Text>
-            <View
-              style={[
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={[
                 styles.amountWrap,
-                exceedsBalance && styles.amountWrapError,
+                exceedsBalance && { borderColor: SAVINGS.withdrawal },
               ]}
             >
               <Text style={styles.amountPrefix}>{plan.currency_code}</Text>
@@ -340,10 +452,10 @@ export default function SavingsWithdrawScreen() {
                 }}
                 keyboardType="numeric"
                 placeholder="0"
-                placeholderTextColor={`${theme.text}30`}
+                placeholderTextColor={CLAY.inkFaint}
                 autoFocus
               />
-            </View>
+            </Clay>
 
             {quickAmounts.length > 0 ? (
               <View style={styles.quickRow}>
@@ -354,10 +466,19 @@ export default function SavingsWithdrawScreen() {
                       setAmount(String(v));
                       setError("");
                     }}
-                    activeOpacity={0.85}
-                    style={styles.quickChip}
+                    activeOpacity={0.9}
                   >
-                    <Text style={styles.quickChipText}>{formatMoney(v)}</Text>
+                    <Clay
+                      color={SAVINGS.tealTint}
+                      radius={RADIUS.md}
+                      depth={0}
+                      shade={CLAY.shadeSoft}
+                      bodyStyle={styles.quickChip}
+                    >
+                      <Text style={styles.quickChipText}>
+                        {formatMoney(v)}
+                      </Text>
+                    </Clay>
                   </TouchableOpacity>
                 ))}
                 <TouchableOpacity
@@ -365,18 +486,26 @@ export default function SavingsWithdrawScreen() {
                     setAmount(String(availableBalance));
                     setError("");
                   }}
-                  activeOpacity={0.85}
-                  style={[styles.quickChip, styles.quickChipMax]}
+                  activeOpacity={0.9}
                 >
-                  <Text style={[styles.quickChipText, { color: "#fff" }]}>
-                    Max
-                  </Text>
+                  <Clay
+                    color={SAVINGS.withdrawal}
+                    radius={RADIUS.md}
+                    depth={0}
+                    highlight="rgba(255,255,255,0.30)"
+                    shade="rgba(120, 40, 40, 0.32)"
+                    bodyStyle={styles.quickChip}
+                  >
+                    <Text style={[styles.quickChipText, { color: "#FFFFFF" }]}>
+                      Max
+                    </Text>
+                  </Clay>
                 </TouchableOpacity>
               </View>
             ) : null}
           </View>
 
-          {/* Reason */}
+          {/* ── Reason ─────────────────────────────────── */}
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Reason</Text>
             <View style={styles.reasonGrid}>
@@ -389,54 +518,68 @@ export default function SavingsWithdrawScreen() {
                       setReason(r.id);
                       setError("");
                     }}
-                    activeOpacity={0.85}
-                    style={[
-                      styles.reasonChip,
-                      selected && {
-                        borderColor: SAVINGS.withdrawal,
-                        backgroundColor: SAVINGS.withdrawalSoft,
-                      },
-                    ]}
+                    activeOpacity={0.9}
                   >
-                    <Text
-                      style={[
-                        styles.reasonChipText,
-                        selected && {
-                          color: SAVINGS.withdrawal,
-                          fontWeight: "700",
-                        },
-                      ]}
+                    <Clay
+                      color={selected ? SAVINGS.withdrawalSoft : CLAY.sunken}
+                      radius={RADIUS.md}
+                      depth={selected ? 1 : 0}
+                      highlight={
+                        selected
+                          ? "rgba(255,255,255,0.32)"
+                          : CLAY.highlight
+                      }
+                      shade={
+                        selected
+                          ? "rgba(120, 40, 40, 0.28)"
+                          : CLAY.shadeSoft
+                      }
+                      bodyStyle={styles.reasonChip}
                     >
-                      {r.label}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.reasonChipText,
+                          selected && styles.reasonChipTextSelected,
+                        ]}
+                      >
+                        {r.label}
+                      </Text>
+                    </Clay>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
 
-          {/* Note */}
+          {/* ── Note ───────────────────────────────────── */}
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>
               Note <Text style={styles.fieldOptional}>(optional)</Text>
             </Text>
-            <TextInput
-              value={note}
-              onChangeText={setNote}
-              placeholder="e.g. Paid school fees for 3 members"
-              placeholderTextColor={theme.textSecondary}
-              style={styles.noteInput}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              maxLength={120}
-            />
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={[styles.inputWell, styles.textAreaWell]}
+            >
+              <TextInput
+                value={note}
+                onChangeText={setNote}
+                placeholder="e.g. Paid school fees for 3 members"
+                placeholderTextColor={CLAY.inkFaint}
+                style={[styles.input, styles.textArea]}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+                maxLength={120}
+              />
+            </Clay>
             <Text style={styles.noteCount}>{note.length}/120</Text>
           </View>
 
-          {/* Preview */}
+          {/* ── Preview ────────────────────────────────── */}
           {isValidAmount ? (
-            <View style={styles.previewCard}>
+            <Clay bodyStyle={styles.previewCard}>
               <View style={styles.previewRow}>
                 <Text style={styles.previewLabel}>Current balance</Text>
                 <Text style={styles.previewValue}>
@@ -458,60 +601,74 @@ export default function SavingsWithdrawScreen() {
                   {plan.currency_code} {formatMoney(balanceAfter)}
                 </Text>
               </View>
-            </View>
+            </Clay>
           ) : null}
 
-          {/* Error */}
+          {/* ── Error ──────────────────────────────────── */}
           {error ? (
-            <View style={styles.errorBox}>
+            <Clay
+              color={SAVINGS.withdrawalSoft}
+              radius={RADIUS.md}
+              depth={0}
+              shade="rgba(120, 40, 40, 0.22)"
+              bodyStyle={styles.errorBox}
+            >
               <AlertTriangle
                 size={14}
                 color={SAVINGS.withdrawal}
-                strokeWidth={2.4}
+                strokeWidth={2.6}
               />
               <Text style={styles.errorText}>{error}</Text>
-            </View>
+            </Clay>
           ) : null}
 
-          {/* Info */}
-          <View style={styles.infoBox}>
-            <Info size={14} color={SAVINGS.tealDark} strokeWidth={2.4} />
+          {/* ── Info ───────────────────────────────────── */}
+          <Clay
+            color={SAVINGS.tealTint}
+            radius={RADIUS.md}
+            depth={0}
+            shade={CLAY.shadeSoft}
+            bodyStyle={styles.infoBox}
+          >
+            <Info size={14} color={SAVINGS.tealInk} strokeWidth={2.4} />
             <Text style={styles.infoText}>
               All members will be notified. The request is released only when{" "}
               {quorum} members approve. You cannot approve your own request.
             </Text>
-          </View>
+          </Clay>
 
-          {/* Submit */}
+          {/* ── Submit ─────────────────────────────────── */}
           <TouchableOpacity
             onPress={handleSubmit}
-            activeOpacity={0.85}
+            activeOpacity={0.9}
             disabled={!isValidAmount || !reason || !quorumReachable}
-            style={[
-              styles.submitWrap,
-              (!isValidAmount || !reason || !quorumReachable) && {
-                opacity: 0.5,
-              },
-            ]}
+            style={styles.submitWrap}
           >
-            <LinearGradient
-              colors={[SAVINGS.withdrawal, SAVINGS.withdrawalDeep]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.submitBtn}
+            <Clay
+              color={SAVINGS.withdrawal}
+              radius={RADIUS.lg}
+              depth={2}
+              highlight="rgba(255,255,255,0.30)"
+              shade="rgba(120, 40, 40, 0.42)"
+              bodyStyle={[
+                styles.submitBtn,
+                (!isValidAmount || !reason || !quorumReachable) && {
+                  opacity: 0.55,
+                },
+              ]}
             >
-              <Send size={16} color="#fff" strokeWidth={2.4} />
+              <Send size={16} color="#FFFFFF" strokeWidth={2.6} />
               <Text style={styles.submitBtnText}>
                 {parsedAmount > 0
                   ? `Request ${plan.currency_code} ${formatMoney(parsedAmount)}`
                   : "Send request"}
               </Text>
-            </LinearGradient>
+            </Clay>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={handleBack}
-            activeOpacity={0.85}
+            activeOpacity={0.9}
             style={styles.cancelBtn}
           >
             <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -526,300 +683,360 @@ export default function SavingsWithdrawScreen() {
 /*  Styles                                                            */
 /* ------------------------------------------------------------------ */
 
-function makeStyles(theme: any) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: theme.background },
-    scroll: { flex: 1 },
-    scrollContent: {
-      paddingHorizontal: SPACING.xl,
-      paddingBottom: SPACING.xxl,
-      gap: SPACING.lg,
-    },
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: CLAY.canvas },
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.lg,
+  },
 
-    header: { paddingTop: SPACING.lg, gap: 4 },
-    eyebrow: {
-      fontSize: TYPE.caption,
-      fontWeight: "800",
-      color: SAVINGS.withdrawal,
-      letterSpacing: 1.2,
-    },
-    title: {
-      fontSize: TYPE.h2,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: -0.5,
-    },
-    subtitle: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      lineHeight: 19,
-      marginTop: 4,
-    },
+  /* Floating back row */
+  backRow: {
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    balanceCard: {
-      borderRadius: RADIUS.xl,
-      padding: SPACING.lg,
-      borderWidth: 1,
-      borderColor: tone(SAVINGS.withdrawal, 0.15),
-      gap: SPACING.sm,
-    },
-    balanceTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    balanceBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 5,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 8,
-      backgroundColor: tone(SAVINGS.withdrawal, 0.12),
-    },
-    balanceBadgeText: {
-      fontSize: 9.5,
-      fontWeight: "800",
-      color: SAVINGS.withdrawal,
-      letterSpacing: 0.8,
-    },
-    balanceAmount: {
-      fontSize: 32,
-      fontWeight: "800",
-      color: SAVINGS.withdrawalDeep,
-      letterSpacing: -1,
-      fontVariant: ["tabular-nums"],
-      marginTop: 4,
-    },
-    balanceMeta: {
-      fontSize: 12,
-      color: SAVINGS.withdrawalDeep,
-      opacity: 0.7,
-      fontWeight: "500",
-    },
+  /* Title block with floating bell */
+  titleBlock: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.md,
+  },
+  eyebrow: {
+    fontSize: TYPE.caption,
+    fontWeight: "800",
+    color: SAVINGS.withdrawal,
+    letterSpacing: 1.2,
+  },
+  title: {
+    fontSize: TYPE.h2,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.8,
+    marginTop: 2,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: CLAY.inkSoft,
+    lineHeight: 19,
+    marginTop: 4,
+    fontWeight: "500",
+    maxWidth: 320,
+  },
+  bellWrap: { position: "relative" },
+  bellBody: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-    quorumBox: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      padding: SPACING.md,
-      borderRadius: RADIUS.md,
-    },
-    quorumText: {
-      flex: 1,
-      fontSize: 12.5,
-      fontWeight: "700",
-      lineHeight: 18,
-    },
+  /* Balance slab */
+  balanceCard: {
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  balanceTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  balanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 9,
+    backgroundColor: "rgba(207, 107, 107, 0.16)",
+  },
+  balanceBadgeText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: SAVINGS.withdrawal,
+    letterSpacing: 0.8,
+  },
+  balanceAmount: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: SAVINGS.withdrawalInk,
+    letterSpacing: -1,
+    fontVariant: ["tabular-nums"],
+    marginTop: 4,
+  },
+  balanceMeta: {
+    fontSize: 12,
+    color: SAVINGS.withdrawalInk,
+    opacity: 0.75,
+    fontWeight: "600",
+  },
 
-    fieldGroup: { gap: SPACING.sm },
-    fieldLabel: {
-      fontSize: TYPE.label,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: 0.2,
-    },
-    fieldOptional: { fontWeight: "500", color: theme.textSecondary },
+  /* Quorum banner */
+  quorumBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+  },
+  quorumText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
 
-    amountWrap: {
-      flexDirection: "row",
-      alignItems: "baseline",
-      gap: 10,
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      backgroundColor: theme.surface ?? theme.background,
-    },
-    amountWrapError: { borderColor: SAVINGS.withdrawal },
-    amountPrefix: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: theme.textSecondary,
-      letterSpacing: 0.4,
-    },
-    amountInput: {
-      flex: 1,
-      fontSize: 28,
-      fontWeight: "800",
-      color: theme.text,
-      padding: 0,
-      letterSpacing: -0.8,
-      fontVariant: ["tabular-nums"],
-    },
+  /* Fields */
+  fieldGroup: { gap: SPACING.sm },
+  fieldLabel: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: CLAY.inkSoft,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  fieldOptional: { fontWeight: "600", color: CLAY.inkFaint, textTransform: "none" },
 
-    quickRow: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-      marginTop: 2,
-      flexWrap: "wrap",
-    },
-    quickChip: {
-      paddingHorizontal: SPACING.md + 2,
-      paddingVertical: SPACING.sm,
-      borderRadius: RADIUS.md,
-      backgroundColor: SAVINGS.mintSoft,
-      minWidth: 70,
-      alignItems: "center",
-    },
-    quickChipMax: { backgroundColor: SAVINGS.withdrawal },
-    quickChipText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: SAVINGS.tealDark,
-      fontVariant: ["tabular-nums"],
-    },
+  /* Amount well */
+  amountWrap: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 10,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md + 2,
+    borderRadius: RADIUS.md,
+    backgroundColor: CLAY.sunken,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CLAY.hairline,
+  },
+  amountPrefix: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: CLAY.inkSoft,
+    letterSpacing: 0.4,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 28,
+    fontWeight: "800",
+    color: CLAY.ink,
+    padding: 0,
+    letterSpacing: -0.8,
+    fontVariant: ["tabular-nums"],
+  },
 
-    reasonGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.sm,
-    },
-    reasonChip: {
-      paddingHorizontal: SPACING.md + 2,
-      paddingVertical: SPACING.sm + 2,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      backgroundColor: theme.surface ?? theme.background,
-    },
-    reasonChipText: {
-      fontSize: 12.5,
-      fontWeight: "600",
-      color: theme.text,
-    },
+  /* Quick chips */
+  quickRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginTop: 2,
+    flexWrap: "wrap",
+  },
+  quickChip: {
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: RADIUS.md,
+    minWidth: 70,
+    alignItems: "center",
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: SAVINGS.tealInk,
+    fontVariant: ["tabular-nums"],
+  },
 
-    noteInput: {
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 14,
-      color: theme.text,
-      backgroundColor: theme.surface ?? theme.background,
-      minHeight: 80,
-    },
-    noteCount: {
-      fontSize: 10.5,
-      color: theme.textSecondary,
-      textAlign: "right",
-      marginTop: -2,
-    },
+  /* Reason chips */
+  reasonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  reasonChip: {
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.sm + 4,
+    borderRadius: RADIUS.md,
+  },
+  reasonChipText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: CLAY.inkSoft,
+  },
+  reasonChipTextSelected: {
+    color: SAVINGS.withdrawal,
+    fontWeight: "800",
+  },
 
-    previewCard: {
-      padding: SPACING.md + 2,
-      borderRadius: RADIUS.lg,
-      backgroundColor: theme.surface ?? theme.background,
-      borderWidth: 1,
-      borderColor: `${theme.text}08`,
-      gap: SPACING.sm,
-    },
-    previewRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    previewLabel: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: theme.textSecondary,
-      letterSpacing: 0.2,
-    },
-    previewValue: {
-      fontSize: 13.5,
-      fontWeight: "700",
-      color: theme.text,
-      fontVariant: ["tabular-nums"],
-    },
-    previewDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: `${theme.text}12`,
-      marginVertical: 2,
-    },
-    previewLabelBold: {
-      fontSize: 12.5,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: 0.2,
-    },
-    previewValueBold: {
-      fontSize: 15,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: -0.3,
-      fontVariant: ["tabular-nums"],
-    },
+  /* Note well */
+  inputWell: {
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.sm,
+    backgroundColor: CLAY.sunken,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CLAY.hairline,
+  },
+  textAreaWell: {
+    paddingVertical: SPACING.md,
+  },
+  input: {
+    fontSize: 14,
+    color: CLAY.ink,
+    fontWeight: "600",
+    padding: 0,
+    minHeight: 26,
+  },
+  textArea: {
+    minHeight: 66,
+    textAlignVertical: "top",
+  },
+  noteCount: {
+    fontSize: 10.5,
+    color: CLAY.inkFaint,
+    textAlign: "right",
+    marginTop: -2,
+    fontWeight: "600",
+  },
 
-    errorBox: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      padding: SPACING.md,
-      borderRadius: RADIUS.md,
-      backgroundColor: SAVINGS.withdrawalSoft,
-      borderWidth: 1,
-      borderColor: tone(SAVINGS.withdrawal, 0.2),
-    },
-    errorText: {
-      flex: 1,
-      fontSize: 12.5,
-      fontWeight: "600",
-      color: SAVINGS.withdrawalDeep,
-      lineHeight: 18,
-    },
+  /* Preview */
+  previewCard: {
+    padding: SPACING.md + 4,
+    borderRadius: RADIUS.lg,
+    gap: SPACING.sm,
+  },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  previewLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: CLAY.inkSoft,
+    letterSpacing: 0.2,
+  },
+  previewValue: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: CLAY.ink,
+    fontVariant: ["tabular-nums"],
+  },
+  previewDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: CLAY.hairline,
+    marginVertical: 4,
+  },
+  previewLabelBold: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: 0.2,
+  },
+  previewValueBold: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.3,
+    fontVariant: ["tabular-nums"],
+  },
 
-    infoBox: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: 8,
-      padding: SPACING.md,
-      borderRadius: RADIUS.md,
-      backgroundColor: SAVINGS.mintSoft,
-    },
-    infoText: {
-      flex: 1,
-      fontSize: 12,
-      fontWeight: "500",
-      color: SAVINGS.tealDark,
-      lineHeight: 17,
-    },
+  /* Error */
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: SAVINGS.withdrawalInk,
+    lineHeight: 18,
+  },
 
-    submitWrap: {
-      marginTop: SPACING.sm,
-      borderRadius: RADIUS.lg,
-      shadowColor: SAVINGS.withdrawal,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.22,
-      shadowRadius: 12,
-      elevation: 4,
-    },
-    submitBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: SPACING.sm,
-      paddingVertical: 15,
-      borderRadius: RADIUS.lg,
-    },
-    submitBtnText: {
-      fontSize: 14.5,
-      fontWeight: "700",
-      color: "#fff",
-      letterSpacing: 0.2,
-    },
-    cancelBtn: {
-      paddingVertical: 13,
-      borderRadius: RADIUS.lg,
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: `${theme.text}15`,
-    },
-    cancelBtnText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme.text,
-    },
-  });
-}
+  /* Info */
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: SAVINGS.tealInk,
+    lineHeight: 17,
+  },
+
+  /* Submit + cancel */
+  submitWrap: {
+    marginTop: SPACING.sm,
+  },
+  submitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.sm,
+    paddingVertical: 15,
+    borderRadius: RADIUS.lg,
+  },
+  submitBtnText: {
+    fontSize: 14.5,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.1,
+  },
+  cancelBtn: {
+    paddingVertical: 15,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    backgroundColor: CLAY.sunken,
+  },
+  cancelBtnText: {
+    fontSize: 14.5,
+    fontWeight: "700",
+    color: CLAY.ink,
+  },
+
+  /* Missing state */
+  missingWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: SPACING.xl,
+  },
+  missingCard: {
+    padding: SPACING.xl,
+    borderRadius: RADIUS.xl,
+    alignItems: "center",
+    gap: SPACING.sm,
+    width: "100%",
+    maxWidth: 320,
+  },
+  missingTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.3,
+  },
+  missingBody: {
+    fontSize: 13,
+    color: CLAY.inkSoft,
+    textAlign: "center",
+    lineHeight: 19,
+    fontWeight: "500",
+  },
+});

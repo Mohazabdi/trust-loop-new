@@ -24,19 +24,51 @@ import {
 } from "lucide-react-native";
 import { toast } from "sonner-native";
 
-import CustomGroupHeader from "@/components/myGroups/customGroupHeader";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
-import { useSavingsStorage, type SavingsFrequency } from "@/store/useSavingsStorage";
+import {
+  useSavingsStorage,
+  type SavingsFrequency,
+} from "@/store/useSavingsStorage";
 
-const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
-const RADIUS = { sm: 8, md: 12, lg: 16, xl: 20 } as const;
-const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
+/* ------------------------------------------------------------------ */
+/*  Design tokens — claymorphism system                               */
+/* ------------------------------------------------------------------ */
 
-const SAVINGS = {
-  teal: "#0D9488",
-  tealDark: "#115E59",
-  mintSoft: "#CCFBF1",
+const CLAY = {
+  canvas: "#E8EDF5",
+  surface: "#F3F6FB",
+  surfaceRaised: "#F7FAFE",
+  sunken: "#DFE6F0",
+  highlight: "#FFFFFF",
+  shade: "rgba(148, 163, 184, 0.55)",
+  shadeSoft: "rgba(148, 163, 184, 0.32)",
+  ink: "#1E293B",
+  inkSoft: "#64748B",
+  inkFaint: "#94A3B8",
+  hairline: "rgba(100, 116, 139, 0.12)",
 } as const;
+
+/**
+ * Savings-specific muted accent. Same hue as the savings sections
+ * elsewhere in the app, desaturated to sit comfortably on the clay
+ * canvas instead of glowing off it.
+ */
+const SAVINGS = {
+  teal: "#3D9A92",
+  tealSoft: "#DBEFED",
+  tealInk: "#2E5C58",
+  mint: "#A7E3DE",
+  growth: "#3E9B62",
+  growthSoft: "#DBEFE1",
+  amber: "#C08A3E",
+  amberSoft: "#F7EAD8",
+  red: "#CF6B6B",
+  redSoft: "#FAE3E3",
+} as const;
+
+const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
+const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
+const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
 
 const FREQ_OPTIONS: { id: SavingsFrequency; label: string }[] = [
   { id: "daily", label: "Daily" },
@@ -44,16 +76,78 @@ const FREQ_OPTIONS: { id: SavingsFrequency; label: string }[] = [
   { id: "monthly", label: "Monthly" },
 ];
 
+/* ------------------------------------------------------------------ */
+/*  Clay primitive                                                    */
+/* ------------------------------------------------------------------ */
+
+function Clay({
+  children,
+  color = CLAY.surface,
+  radius = RADIUS.lg,
+  highlight = CLAY.highlight,
+  shade = CLAY.shade,
+  depth = 1,
+  style,
+  bodyStyle,
+}: {
+  children: React.ReactNode;
+  color?: string;
+  radius?: number;
+  highlight?: string;
+  shade?: string;
+  depth?: number;
+  style?: any;
+  bodyStyle?: any;
+}) {
+  const offset = 4 + depth * 2;
+  const drop = offset + 2;
+
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: color,
+          borderRadius: radius,
+          shadowColor: shade,
+          shadowOffset: { width: drop, height: drop },
+          shadowOpacity: 1,
+          shadowRadius: drop * 1.9,
+          elevation: 3 + depth * 3,
+        },
+        style,
+      ]}
+    >
+      <View
+        style={[
+          {
+            backgroundColor: color,
+            borderRadius: radius,
+            shadowColor: highlight,
+            shadowOffset: { width: -offset, height: -offset },
+            shadowOpacity: 1,
+            shadowRadius: offset * 1.5,
+          },
+          bodyStyle,
+        ]}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Screen                                                            */
+/* ------------------------------------------------------------------ */
+
 export default function SavingsSettingsScreen() {
   const router = useRouter();
-  const { theme, setIsNotificationOpen } = useGlobalStorage();
+  const { setIsNotificationOpen } = useGlobalStorage();
   const params = useLocalSearchParams<{
     plan_id: string;
     group_id: string;
     group_member_id: string;
   }>();
-
-  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const plan = useSavingsStorage((s) =>
     s.plans.find((p) => p.savings_plan_id === params.plan_id)
@@ -177,15 +271,25 @@ export default function SavingsSettingsScreen() {
   if (!plan) {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
-        <CustomGroupHeader
-          groupName="Plan settings"
-          leftAction={{ icon: ChevronLeft, action: handleBack }}
-          rightAction={{ icon: BellIcon, action: handleNotifications }}
-        />
-        <View style={{ padding: 40, alignItems: "center" }}>
-          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
-            Plan not found.
-          </Text>
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={handleBack}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.missingWrap}>
+          <Clay bodyStyle={styles.missingCard}>
+            <Text style={styles.missingTitle}>Plan not found</Text>
+            <Text style={styles.missingBody}>
+              This savings plan is no longer available.
+            </Text>
+          </Clay>
         </View>
       </SafeAreaView>
     );
@@ -196,218 +300,349 @@ export default function SavingsSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomGroupHeader
-        groupName="Plan settings"
-        leftAction={{ icon: ChevronLeft, action: handleBack }}
-        rightAction={{ icon: BellIcon, action: handleNotifications }}
-      />
-
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>SETTINGS</Text>
-          <Text style={styles.title}>{plan.savings_name}</Text>
-          <Text style={styles.subtitle}>
-            Edit your plan, pause contributions, or delete it.
-          </Text>
-        </View>
-
-        {/* Basics */}
-        <Text style={styles.groupLabel}>Basics</Text>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Plan name</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            style={styles.input}
-            placeholder="Plan name"
-            placeholderTextColor={theme.textSecondary}
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Description</Text>
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            style={[styles.input, styles.textArea]}
-            placeholder="What's this savings for?"
-            placeholderTextColor={theme.textSecondary}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
-        </View>
-
-        {/* Target & contribution */}
-        <Text style={styles.groupLabel}>Target & contribution</Text>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Target amount</Text>
-          <TextInput
-            value={target}
-            onChangeText={setTarget}
-            style={styles.input}
-            keyboardType="numeric"
-            placeholder="100000"
-            placeholderTextColor={theme.textSecondary}
-          />
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Contribution per cycle</Text>
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            style={styles.input}
-            keyboardType="numeric"
-            placeholder="2500"
-            placeholderTextColor={theme.textSecondary}
-          />
-        </View>
-
-        {/* Frequency */}
-        <Text style={styles.groupLabel}>Schedule</Text>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Frequency</Text>
-          <View style={styles.freqRow}>
-            {FREQ_OPTIONS.map((opt) => {
-              const selected = frequency === opt.id;
-              return (
-                <TouchableOpacity
-                  key={opt.id}
-                  onPress={() => setFrequency(opt.id)}
-                  activeOpacity={0.85}
-                  style={[
-                    styles.freqOption,
-                    selected && {
-                      borderColor: SAVINGS.teal,
-                      backgroundColor: SAVINGS.mintSoft,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.freqOptionText,
-                      selected && {
-                        color: SAVINGS.tealDark,
-                        fontWeight: "800",
-                      },
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Start date</Text>
+        {/* ── Floating back row ─────────────────────────── */}
+        <View style={styles.backRow}>
           <TouchableOpacity
-            onPress={() => setShowDate(true)}
-            activeOpacity={0.85}
-            style={styles.dropdown}
+            onPress={handleBack}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
           >
-            <CalendarRange size={16} color={SAVINGS.teal} />
-            <Text style={styles.dropdownText}>{formatDate(startDate)}</Text>
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
           </TouchableOpacity>
-          {showDate ? (
-            <DateTimePicker
-              value={startDate}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={onDateChange}
-            />
-          ) : null}
         </View>
 
-        {/* Save */}
+        {/* ── Title block with floating bell ────────────── */}
+        <View style={styles.titleBlock}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.eyebrow}>SETTINGS</Text>
+            <Text style={styles.title} numberOfLines={2}>
+              {plan.savings_name}
+            </Text>
+            <Text style={styles.subtitle}>
+              Edit your plan, pause contributions, or delete it.
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleNotifications}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            style={styles.bellWrap}
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.bellBody}>
+              <BellIcon size={20} color={CLAY.ink} strokeWidth={2.4} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Section: Basics ───────────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionMarker} />
+          <Text style={styles.groupLabel}>Basics</Text>
+        </View>
+
+        <Clay bodyStyle={styles.card}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Plan name</Text>
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={styles.inputWell}
+            >
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                style={styles.input}
+                placeholder="Plan name"
+                placeholderTextColor={CLAY.inkFaint}
+              />
+            </Clay>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Description</Text>
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={[styles.inputWell, styles.textAreaWell]}
+            >
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                style={[styles.input, styles.textArea]}
+                placeholder="What's this savings for?"
+                placeholderTextColor={CLAY.inkFaint}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </Clay>
+          </View>
+        </Clay>
+
+        {/* ── Section: Target & contribution ────────────── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionMarker} />
+          <Text style={styles.groupLabel}>Target & contribution</Text>
+        </View>
+
+        <Clay bodyStyle={styles.card}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Target amount</Text>
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={styles.inputWell}
+            >
+              <TextInput
+                value={target}
+                onChangeText={setTarget}
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="100000"
+                placeholderTextColor={CLAY.inkFaint}
+              />
+            </Clay>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Contribution per cycle</Text>
+            <Clay
+              radius={RADIUS.md}
+              depth={0}
+              shade={CLAY.shadeSoft}
+              bodyStyle={styles.inputWell}
+            >
+              <TextInput
+                value={amount}
+                onChangeText={setAmount}
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="2500"
+                placeholderTextColor={CLAY.inkFaint}
+              />
+            </Clay>
+          </View>
+        </Clay>
+
+        {/* ── Section: Schedule ─────────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionMarker} />
+          <Text style={styles.groupLabel}>Schedule</Text>
+        </View>
+
+        <Clay bodyStyle={styles.card}>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Frequency</Text>
+            <View style={styles.freqRow}>
+              {FREQ_OPTIONS.map((opt) => {
+                const selected = frequency === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    onPress={() => setFrequency(opt.id)}
+                    activeOpacity={0.9}
+                    style={{ flex: 1 }}
+                  >
+                    <Clay
+                      color={selected ? SAVINGS.teal : CLAY.sunken}
+                      radius={RADIUS.md}
+                      depth={selected ? 1 : 0}
+                      highlight={
+                        selected
+                          ? "rgba(255,255,255,0.30)"
+                          : CLAY.highlight
+                      }
+                      shade={
+                        selected
+                          ? "rgba(30, 70, 66, 0.38)"
+                          : CLAY.shadeSoft
+                      }
+                      bodyStyle={styles.freqOption}
+                    >
+                      <Text
+                        style={[
+                          styles.freqOptionText,
+                          selected && styles.freqOptionTextSelected,
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </Clay>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Start date</Text>
+            <TouchableOpacity
+              onPress={() => setShowDate(true)}
+              activeOpacity={0.9}
+              style={styles.dropdown}
+            >
+              <CalendarRange
+                size={16}
+                color={SAVINGS.teal}
+                strokeWidth={2.4}
+              />
+              <Text style={styles.dropdownText}>{formatDate(startDate)}</Text>
+            </TouchableOpacity>
+            {showDate ? (
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={onDateChange}
+              />
+            ) : null}
+          </View>
+        </Clay>
+
+        {/* ── Save ──────────────────────────────────────── */}
         <TouchableOpacity
           onPress={handleSave}
-          activeOpacity={0.85}
-          style={styles.primaryBtn}
+          activeOpacity={0.9}
+          style={styles.saveWrap}
         >
-          <Text style={styles.primaryBtnText}>Save changes</Text>
+          <Clay
+            color={SAVINGS.teal}
+            radius={RADIUS.lg}
+            depth={2}
+            highlight="rgba(255,255,255,0.34)"
+            shade="rgba(30, 70, 66, 0.42)"
+            bodyStyle={styles.primaryBtn}
+          >
+            <Text style={styles.primaryBtnText}>Save changes</Text>
+          </Clay>
         </TouchableOpacity>
 
-        {/* Status actions */}
-        <Text style={styles.groupLabel}>Status</Text>
+        {/* ── Section: Status ───────────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionMarker} />
+          <Text style={styles.groupLabel}>Status</Text>
+        </View>
 
         {!isCompleted ? (
           <TouchableOpacity
             onPress={handlePauseResume}
-            activeOpacity={0.85}
-            style={styles.rowAction}
+            activeOpacity={0.9}
+          >
+            <Clay
+              bodyStyle={[
+                styles.rowAction,
+                {
+                  borderLeftWidth: 3,
+                  borderLeftColor: isPaused
+                    ? SAVINGS.growth
+                    : SAVINGS.amber,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.rowIcon,
+                  {
+                    backgroundColor: isPaused
+                      ? SAVINGS.growthSoft
+                      : SAVINGS.amberSoft,
+                  },
+                ]}
+              >
+                {isPaused ? (
+                  <Play
+                    size={16}
+                    color={SAVINGS.growth}
+                    strokeWidth={2.6}
+                  />
+                ) : (
+                  <Pause
+                    size={16}
+                    color={SAVINGS.amber}
+                    strokeWidth={2.6}
+                  />
+                )}
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.rowActionTitle}>
+                  {isPaused ? "Resume contributions" : "Pause contributions"}
+                </Text>
+                <Text style={styles.rowActionHelper}>
+                  {isPaused
+                    ? "Members can contribute again immediately"
+                    : "Members can view the plan, but cannot contribute"}
+                </Text>
+              </View>
+            </Clay>
+          </TouchableOpacity>
+        ) : (
+          <Clay
+            color={SAVINGS.growthSoft}
+            radius={RADIUS.lg}
+            depth={0}
+            shade={CLAY.shadeSoft}
+            bodyStyle={styles.completedNote}
+          >
+            <Text style={styles.completedNoteText}>
+              This plan has reached its target and is now completed.
+            </Text>
+          </Clay>
+        )}
+
+        {/* ── Section: Danger zone ──────────────────────── */}
+        <View style={styles.sectionHeader}>
+          <View
+            style={[
+              styles.sectionMarker,
+              { backgroundColor: SAVINGS.red },
+            ]}
+          />
+          <Text style={[styles.groupLabel, { color: SAVINGS.red }]}>
+            Danger zone
+          </Text>
+        </View>
+
+        <TouchableOpacity onPress={handleDelete} activeOpacity={0.9}>
+          <Clay
+            color={SAVINGS.redSoft}
+            radius={RADIUS.lg}
+            depth={0}
+            highlight={CLAY.highlight}
+            shade={CLAY.shadeSoft}
+            bodyStyle={styles.rowAction}
           >
             <View
               style={[
                 styles.rowIcon,
-                {
-                  backgroundColor: isPaused
-                    ? "rgba(22,163,74,0.1)"
-                    : "rgba(217,119,6,0.1)",
-                },
+                { backgroundColor: "rgba(207, 107, 107, 0.18)" },
               ]}
             >
-              {isPaused ? (
-                <Play size={16} color="#16A34A" strokeWidth={2.4} />
-              ) : (
-                <Pause size={16} color="#D97706" strokeWidth={2.4} />
-              )}
+              <Trash2 size={16} color={SAVINGS.red} strokeWidth={2.6} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.rowActionTitle}>
-                {isPaused ? "Resume contributions" : "Pause contributions"}
+              <Text
+                style={[styles.rowActionTitle, { color: SAVINGS.red }]}
+              >
+                Delete plan
               </Text>
               <Text style={styles.rowActionHelper}>
-                {isPaused
-                  ? "Members can contribute again immediately"
-                  : "Members can view the plan, but cannot contribute"}
+                Permanently remove this plan and all contributions
               </Text>
             </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.completedNote}>
-            <Text style={styles.completedNoteText}>
-              This plan has reached its target and is now completed.
-            </Text>
-          </View>
-        )}
-
-        {/* Danger zone */}
-        <Text style={[styles.groupLabel, { color: "#DC2626" }]}>
-          Danger zone
-        </Text>
-
-        <TouchableOpacity
-          onPress={handleDelete}
-          activeOpacity={0.85}
-          style={[styles.rowAction, styles.dangerAction]}
-        >
-          <View
-            style={[
-              styles.rowIcon,
-              { backgroundColor: "rgba(220,38,38,0.1)" },
-            ]}
-          >
-            <Trash2 size={16} color="#DC2626" strokeWidth={2.4} />
-          </View>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={[styles.rowActionTitle, { color: "#DC2626" }]}>
-              Delete plan
-            </Text>
-            <Text style={styles.rowActionHelper}>
-              Permanently remove this plan and all contributions
-            </Text>
-          </View>
+          </Clay>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -416,152 +651,255 @@ export default function SavingsSettingsScreen() {
   );
 }
 
-function makeStyles(theme: any) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: theme.background },
-    scroll: { flex: 1 },
-    scrollContent: {
-      paddingHorizontal: SPACING.xl,
-      paddingBottom: SPACING.xxl,
-      gap: SPACING.md,
-    },
-    header: { paddingTop: SPACING.lg, paddingBottom: SPACING.md, gap: 4 },
-    eyebrow: {
-      fontSize: TYPE.caption,
-      fontWeight: "800",
-      color: theme.textSecondary,
-      letterSpacing: 1.2,
-    },
-    title: {
-      fontSize: TYPE.h2,
-      fontWeight: "800",
-      color: theme.text,
-      letterSpacing: -0.5,
-    },
-    subtitle: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      lineHeight: 19,
-      marginTop: 2,
-    },
-    groupLabel: {
-      fontSize: TYPE.caption,
-      fontWeight: "800",
-      color: theme.textSecondary,
-      letterSpacing: 1.2,
-      textTransform: "uppercase",
-      marginTop: SPACING.lg,
-      marginBottom: SPACING.xs,
-    },
-    fieldGroup: { gap: SPACING.sm },
-    fieldLabel: {
-      fontSize: TYPE.label,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: 0.2,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 14.5,
-      color: theme.text,
-      backgroundColor: theme.surface ?? theme.background,
-    },
-    textArea: { minHeight: 80, paddingTop: 12 },
-    dropdown: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: 14,
-      paddingVertical: 13,
-      backgroundColor: theme.surface ?? theme.background,
-    },
-    dropdownText: {
-      fontSize: 14.5,
-      color: theme.text,
-      fontWeight: "500",
-      flex: 1,
-    },
-    freqRow: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-    },
-    freqOption: {
-      flex: 1,
-      paddingVertical: SPACING.md,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: `${theme.text}12`,
-      backgroundColor: theme.surface ?? theme.background,
-      alignItems: "center",
-    },
-    freqOptionText: {
-      fontSize: 13,
-      fontWeight: "600",
-      color: theme.text,
-    },
-    primaryBtn: {
-      marginTop: SPACING.lg,
-      paddingVertical: 15,
-      borderRadius: RADIUS.lg,
-      alignItems: "center",
-      backgroundColor: SAVINGS.teal,
-    },
-    primaryBtnText: {
-      fontSize: 15,
-      fontWeight: "700",
-      color: "#fff",
-      letterSpacing: 0.2,
-    },
-    rowAction: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      padding: SPACING.md + 2,
-      borderRadius: RADIUS.lg,
-      backgroundColor: theme.surface ?? theme.background,
-      borderWidth: 1,
-      borderColor: `${theme.text}08`,
-    },
-    dangerAction: {
-      borderColor: "rgba(220,38,38,0.25)",
-      backgroundColor: "rgba(220,38,38,0.04)",
-    },
-    rowIcon: {
-      width: 38,
-      height: 38,
-      borderRadius: RADIUS.md,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    rowActionTitle: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: theme.text,
-      letterSpacing: -0.2,
-    },
-    rowActionHelper: {
-      fontSize: 11.5,
-      color: theme.textSecondary,
-      lineHeight: 16,
-    },
-    completedNote: {
-      padding: SPACING.md + 2,
-      borderRadius: RADIUS.lg,
-      backgroundColor: "rgba(22,163,74,0.06)",
-      borderWidth: 1,
-      borderColor: "rgba(22,163,74,0.2)",
-    },
-    completedNoteText: {
-      fontSize: 13,
-      color: "#166534",
-      lineHeight: 19,
-    },
-  });
-}
+/* ------------------------------------------------------------------ */
+/*  Styles                                                            */
+/* ------------------------------------------------------------------ */
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: CLAY.canvas },
+  scroll: { flex: 1 },
+  scrollContent: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.md,
+  },
+
+  /* Floating back row */
+  backRow: {
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* Title block with floating bell */
+  titleBlock: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  eyebrow: {
+    fontSize: TYPE.caption,
+    fontWeight: "800",
+    color: CLAY.inkFaint,
+    letterSpacing: 1.2,
+  },
+  title: {
+    fontSize: TYPE.h2,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.8,
+    marginTop: 2,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: CLAY.inkSoft,
+    lineHeight: 19,
+    marginTop: 4,
+    fontWeight: "500",
+    maxWidth: 320,
+  },
+  bellWrap: { position: "relative" },
+  bellBody: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* Section labels */
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: SPACING.xl,
+    marginBottom: -SPACING.xs,
+  },
+  sectionMarker: {
+    width: 4,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: CLAY.ink,
+  },
+  groupLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: CLAY.inkSoft,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+
+  /* Card wrapping fields */
+  card: {
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    gap: SPACING.lg,
+  },
+
+  /* Fields */
+  fieldGroup: { gap: 6 },
+  fieldLabel: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: CLAY.inkSoft,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+
+  /* Recessed input wells */
+  inputWell: {
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.sm,
+    backgroundColor: CLAY.sunken,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CLAY.hairline,
+  },
+  textAreaWell: {
+    paddingVertical: SPACING.md,
+  },
+  input: {
+    fontSize: 14.5,
+    color: CLAY.ink,
+    fontWeight: "600",
+    padding: 0,
+    minHeight: 26,
+  },
+  textArea: {
+    minHeight: 66,
+    textAlignVertical: "top",
+  },
+
+  /* Dropdown */
+  dropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: CLAY.sunken,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: Platform.OS === "ios" ? 14 : 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: CLAY.hairline,
+  },
+  dropdownText: {
+    fontSize: 14.5,
+    color: CLAY.ink,
+    fontWeight: "600",
+    flex: 1,
+  },
+
+  /* Frequency chips */
+  freqRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  freqOption: {
+    paddingVertical: SPACING.md + 2,
+    borderRadius: RADIUS.md,
+    alignItems: "center",
+  },
+  freqOptionText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: CLAY.ink,
+    letterSpacing: -0.1,
+  },
+  freqOptionTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+  },
+
+  /* Save */
+  saveWrap: {
+    marginTop: SPACING.lg,
+  },
+  primaryBtn: {
+    paddingVertical: 15,
+    borderRadius: RADIUS.lg,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryBtnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
+  },
+
+  /* Row actions (pause / delete) */
+  rowAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    padding: SPACING.md + 2,
+    borderRadius: RADIUS.lg,
+  },
+  rowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowActionTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.2,
+  },
+  rowActionHelper: {
+    fontSize: 11.5,
+    color: CLAY.inkSoft,
+    lineHeight: 16,
+    fontWeight: "500",
+  },
+
+  /* Completed note */
+  completedNote: {
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+  },
+  completedNoteText: {
+    fontSize: 13,
+    color: SAVINGS.growth,
+    lineHeight: 19,
+    fontWeight: "700",
+  },
+
+  /* Missing state */
+  missingWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: SPACING.xl,
+  },
+  missingCard: {
+    padding: SPACING.xl,
+    borderRadius: RADIUS.xl,
+    alignItems: "center",
+    gap: SPACING.sm,
+    width: "100%",
+    maxWidth: 320,
+  },
+  missingTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: CLAY.ink,
+    letterSpacing: -0.3,
+  },
+  missingBody: {
+    fontSize: 13,
+    color: CLAY.inkSoft,
+    textAlign: "center",
+    lineHeight: 19,
+    fontWeight: "500",
+  },
+});

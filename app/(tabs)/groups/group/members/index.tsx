@@ -1,4 +1,3 @@
-import CustomGroupHeader from "@/components/myGroups/customGroupHeader";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -404,34 +403,57 @@ export default function GroupMembersPage() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <CustomGroupHeader
-        groupName={
-          groupNameParam ? `${groupNameParam} · Members` : "Group Members"
-        }
-        leftAction={{ icon: ChevronLeft, action: leftAction }}
-        rightAction={{
-          icon: BellIcon,
-          action: rightAction,
-          badgeCount: isAdmin ? requestsBadgeCount : 0,
-        }}
-      />
-
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Intro ─────────────────────────────────────── */}
+        {/* ── Floating back button row ──────────────────── */}
+        <View style={styles.backRow}>
+          <TouchableOpacity
+            onPress={leftAction}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Clay radius={18} depth={1} bodyStyle={styles.backBtn}>
+              <ChevronLeft size={20} color={CLAY.ink} strokeWidth={2.6} />
+            </Clay>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Intro with floating bell (admins) ─────────── */}
         <View style={styles.header}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={styles.eyebrow}>MEMBERS</Text>
-            <Text style={styles.headerTitle}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
               {members.length} {members.length === 1 ? "member" : "members"}
             </Text>
             <Text style={styles.headerHint}>
               Everyone in this group, sorted by join date.
             </Text>
           </View>
+
+          {isAdmin ? (
+            <TouchableOpacity
+              onPress={rightAction}
+              activeOpacity={0.9}
+              accessibilityRole="button"
+              accessibilityLabel="Join requests"
+              style={styles.bellWrap}
+            >
+              <Clay radius={18} depth={1} bodyStyle={styles.bellBody}>
+                <BellIcon size={20} color={CLAY.ink} strokeWidth={2.4} />
+                {requestsBadgeCount > 0 ? (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>
+                      {requestsBadgeCount > 9 ? "9+" : requestsBadgeCount}
+                    </Text>
+                  </View>
+                ) : null}
+              </Clay>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* ── Admin invite action ──────────────────────── */}
@@ -441,11 +463,7 @@ export default function GroupMembersPage() {
             activeOpacity={0.9}
             style={styles.inviteWrap}
           >
-            <Clay
-              radius={RADIUS.lg}
-              depth={0}
-              bodyStyle={styles.inviteBtn}
-            >
+            <Clay radius={RADIUS.lg} depth={0} bodyStyle={styles.inviteBtn}>
               <UserPlus size={15} color={ACCENT.navy} strokeWidth={2.4} />
               <Text style={styles.inviteBtnText}>Invite members</Text>
             </Clay>
@@ -527,11 +545,7 @@ export default function GroupMembersPage() {
           activeOpacity={0.9}
           style={styles.leaveWrap}
         >
-          <Clay
-            radius={RADIUS.lg}
-            depth={0}
-            bodyStyle={styles.leaveRibbon}
-          >
+          <Clay radius={RADIUS.lg} depth={0} bodyStyle={styles.leaveRibbon}>
             <LogOut size={16} color={ACCENT.red} strokeWidth={2.4} />
             <Text style={styles.leaveRibbonText}>Leave group</Text>
           </Clay>
@@ -638,10 +652,7 @@ export default function GroupMembersPage() {
             onEndReachedThreshold={0.3}
             ListFooterComponent={
               availableLoading ? (
-                <ActivityIndicator
-                  size="small"
-                  style={{ marginVertical: 12 }}
-                />
+                <ActivityIndicator size="small" style={{ marginVertical: 12 }} />
               ) : null
             }
             ListEmptyComponent={
@@ -816,9 +827,7 @@ export default function GroupMembersPage() {
                   ]}
                 >
                   <Text style={styles.confirmBtnPrimaryText}>
-                    {leaveGroupMutation.isPending
-                      ? "Leaving…"
-                      : "Yes, leave"}
+                    {leaveGroupMutation.isPending ? "Leaving…" : "Yes, leave"}
                   </Text>
                 </Clay>
               </TouchableOpacity>
@@ -868,10 +877,23 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  /* Intro */
+  /* Floating back row */
+  backRow: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* Intro with floating bell */
   header: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.md,
@@ -895,6 +917,36 @@ const styles = StyleSheet.create({
     color: CLAY.inkSoft,
     fontWeight: "500",
     marginTop: 2,
+  },
+
+  /* Bell button */
+  bellWrap: { position: "relative" },
+  bellBody: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  bellBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    backgroundColor: ACCENT.red,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: CLAY.surface,
+  },
+  bellBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 12,
   },
 
   /* Invite button */
