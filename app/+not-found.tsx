@@ -39,8 +39,7 @@ export default function NotFoundScreen() {
               lineHeight: 24,
             }}
           >
-            mhhh .. Looks like you got lost, but dont worry you can always go
-            back !
+            loading...
           </Text>
         </View>
 

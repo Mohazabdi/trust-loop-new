@@ -42,7 +42,7 @@ function RootNavigation() {
   const { isLoggedIn, isLoading } = useAuthContext();
   if (isLoading) {
     return (
-      <LoadingScreen message="Subiri kidogo!, getting your account ready" />
+      <LoadingScreen message="loading account details" />
     );
   }
   return (
