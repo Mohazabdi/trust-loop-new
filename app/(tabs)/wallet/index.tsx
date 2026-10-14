@@ -83,7 +83,7 @@ export default function MyWalletScreen() {
   const styles = useMemo(() => MywalletScreenStyles(theme), [theme]);
 
   if (memberLoading)
-    return <LoadingScreen message="You made it! securing your profile" />;
+    return <LoadingScreen message="securing your profile" />;
   if (memberError) return <ErrorScreen message={memberError.message} />;
 
   return (

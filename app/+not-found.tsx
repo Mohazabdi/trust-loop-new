@@ -29,7 +29,7 @@ export default function NotFoundScreen() {
         </View>
         <View style={{ alignItems: "center", gap: 8, marginBottom: 15 }}>
           <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1a1a1a" }}>
-            Where are you?
+            The page is currently unavailable
           </Text>
           <Text
             style={{
@@ -61,7 +61,7 @@ export default function NotFoundScreen() {
           }}
         >
           <Text style={{ color: "#fff", fontSize: 18, fontWeight: "bold" }}>
-            Go back
+            updates coming for this page as for now just go back.
           </Text>
         </TouchableOpacity>
       </View>
