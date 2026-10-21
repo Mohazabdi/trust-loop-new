@@ -303,7 +303,7 @@ export default function WithdrawFunds() {
                       : theme.error
                     : theme.border,
               }}
-              placeholder="+254xx"
+              placeholder="+254 xxxx xxx xx"
               placeholderTextColor={theme.textSecondary}
             />
 
@@ -357,9 +357,9 @@ export default function WithdrawFunds() {
         snapPoints={["70%"]}
       >
      <ListOfAccounts
-                      closeBottomSheet={() =>{
-                        //bottomAccountSheetRef.current?.close()
-                      closeAccountsSheet()
+          closeBottomSheet={() =>{
+          //bottomAccountSheetRef.current?.close()
+          closeAccountsSheet()
                       }
                       }
                     />
