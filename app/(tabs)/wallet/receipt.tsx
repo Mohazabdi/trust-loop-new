@@ -23,7 +23,7 @@ import {
     Wallet2,
     XCircle,
 } from "lucide-react-native";
-import { ChevronLeft } from "lucide-react-native/icons";
+import { ChevronLeft } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

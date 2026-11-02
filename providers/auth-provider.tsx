@@ -1,78 +1,95 @@
 import { AuthContext } from "@/hooks/use-auth-context";
 import { supabase } from "@/lib/mysupabase/supabase";
-//import { supabase } from "@/lib/mySupabase/supabase";
-
 import { PropsWithChildren, useEffect, useState } from "react";
 
 export default function AuthProvider({ children }: PropsWithChildren) {
-  const [claims, setClaims] = useState<
-    Record<string, any> | undefined | null
-  >();
-  const [profile, setProfile] = useState<any>();
+  const [claims, setClaims] = useState<Record<string, any> | null>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Fetch the claims once, and subscribe to auth state changes
+  // 1) Load the initial session once, and subscribe to auth changes.
   useEffect(() => {
-    const fetchClaims = async () => {
-      setIsLoading(true);
+    let mounted = true;
 
-      const { data, error } = await supabase.auth.getClaims();
+    const loadSession = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
 
-      if (error) {
-        console.error("Error fetching claims:", error);
+        if (error) console.error("Error fetching session:", error);
+        if (!mounted) return;
+
+        if (session?.user) {
+          setClaims({ sub: session.user.id, email: session.user.email });
+        } else {
+          setClaims(null);
+          setProfile(null);
+        }
+      } catch (err) {
+        console.error("Unexpected session error:", err);
+        if (mounted) setClaims(null);
       }
-
-      setClaims(data?.claims ?? null);
-      setIsLoading(false);
     };
 
-    fetchClaims();
+    loadSession();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, _session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log("Auth state changed:", { event: _event });
-      // const { data } = await supabase.auth.getClaims();
-      // setClaims(data?.claims ?? null);
-      if (_session?.user) {
-        setClaims({
-          sub: _session.user.id,
-          email: _session.user.email,
-        });
+      if (session?.user) {
+        setClaims({ sub: session.user.id, email: session.user.email });
       } else {
         setClaims(null);
         setProfile(null);
       }
     });
 
-    // Cleanup subscription on unmount
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
-  // Fetch the profile when the claims change
+  // 2) Fetch the member profile whenever claims change. Always resolve isLoading.
   useEffect(() => {
+    let cancelled = false;
+
+    if (!claims?.sub) {
+      setProfile(null);
+      setIsLoading(false);
+      return;
+    }
+
     const fetchProfile = async () => {
       setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("members")
+          .select(
+            "id, member_ref, auth_id, first_name, last_name, other_name, email, date_of_register, is_active"
+          )
+          .eq("auth_id", claims.sub)
+          .maybeSingle();
 
-      if (claims) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", claims.sub)
-          .single();
-
-        setProfile(data);
-      } else {
-        setProfile(null);
+        if (error) console.error("Error fetching member profile:", error);
+        if (!cancelled) setProfile(data ?? null);
+      } catch (err) {
+        console.error("Unexpected member profile error:", err);
+        if (!cancelled) setProfile(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-
-      setIsLoading(false);
     };
 
     fetchProfile();
-  }, [claims]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [claims?.sub]);
 
   return (
     <AuthContext.Provider
@@ -81,7 +98,6 @@ export default function AuthProvider({ children }: PropsWithChildren) {
         isLoading,
         profile,
         isLoggedIn: !!claims,
-        // isLoggedIn: claims != undefined,
       }}
     >
       {children}

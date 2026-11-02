@@ -38,7 +38,7 @@ async function main() {
   await render(mono, { width: 1024, height: 1024, out: "trust-loop-monochrome.png" });
   await render(icon, { width: 64, height: 64, out: "favicon.png", flatten: "#0A1130" });
 
-  console.log("\nAll assets written to assets/images/");
+  
 }
 
 main().catch((err) => {
