@@ -29,7 +29,7 @@ export default function NotFoundScreen() {
         </View>
         <View style={{ alignItems: "center", gap: 8, marginBottom: 15 }}>
           <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1a1a1a" }}>
-            The page is currently unavailable
+            Their is some system maintainance on this page right now
           </Text>
           <Text
             style={{
@@ -39,7 +39,7 @@ export default function NotFoundScreen() {
               lineHeight: 24,
             }}
           >
-            loading...
+            ...loading...
           </Text>
         </View>
 
