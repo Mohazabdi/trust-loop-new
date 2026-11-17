@@ -177,7 +177,7 @@ export default function LogInOTPPage() {
       setErrorMessage(error.message);
       return;
     }
-    console.log("OTP verified successfully");
+   // console.log("OTP verified successfully");
     router.replace("/(tabs)");
   };
   const [alwaysUseOtp, setAlwaysUseOtp] = useState(false);

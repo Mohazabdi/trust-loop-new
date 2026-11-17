@@ -61,7 +61,7 @@ export default function NotFoundScreen() {
           }}
         >
           <Text style={{ color: "#fff", fontSize: 18, fontWeight: "bold" }}>
-            updates coming for this page as for now just go back.
+            Go Back
           </Text>
         </TouchableOpacity>
       </View>

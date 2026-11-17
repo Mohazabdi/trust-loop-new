@@ -101,9 +101,9 @@ export default function LogInPage() {
           position: "top-center",
           icon: <AlertCircle size={20} color={theme.error} />,
         });
-      } else {
-        console.log(`session successfully established:${result.data.user}`);
-      }
+      }// else {
+      //   console.log(`session successfully established:${result.data.user}`);
+      // }
     } catch (e) {
       setErrors((prev) => ({
         ...prev,
@@ -137,7 +137,7 @@ export default function LogInPage() {
           <Text style={styles.welcomeText}>Karibu TrustLoop</Text>
         </View>
         <View style={styles.greetingsContainer}>
-          <Text style={styles.loginPromptText}>Log in to your continue</Text>
+          <Text style={styles.loginPromptText}>Log in to continue</Text>
         </View>
         <View style={styles.formContainer}>
           <Text style={styles.fieldLabel}>Email/Phone Number *</Text>

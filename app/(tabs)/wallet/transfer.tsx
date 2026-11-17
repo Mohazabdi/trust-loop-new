@@ -227,16 +227,15 @@ export default function TransferFundsScreen() {
           transaction_status: "completed",
         });
       } catch (finError: any) {
-        console.error("Finalize Failed ,transction proced", finError);
+       
         toast.warning("Transaction processed but confirmation pending.");
       }
-      toast.success("Money Transfered successfully!");
+      toast.success("Transfer was successful");
       router.push({
         pathname: "/(tabs)/wallet/receipt",
         params: { transaction_id: result.data?.transaction_id },
       });
     } catch (error: any) {
-      //console.error("Transaction failed:", error.message);
       toast.error(error.message || "Transfer failed. Please try again.");
     }finally{
       reset()
@@ -261,8 +260,7 @@ export default function TransferFundsScreen() {
     } else {
       setRecipientDrawerAction("choose");
     }
-    // console.log("Action::::", recipientDrawerAction);
-    // console.log("Selected Recipient::::", selectedRecipient?.id);
+    
   }, [selectedRecipient]);
 
   return (
@@ -308,7 +306,7 @@ export default function TransferFundsScreen() {
                   onPress={() => handleAccountDrawerOpening()}
                 >
                   <Text style={styles.emptyAccountSectionTitle}>
-                    No Account has been selected tap to select an account
+                    No Account has been selected
                   </Text>
                   <ArrowBigUpDash color={theme.textSecondary} size={62} />
                 </TouchableOpacity>
