@@ -609,7 +609,7 @@ const htmlReceipt = `
               </View>
               <View style={styles.footer}>
                 <Text style={{ fontSize: 10 }}>Transaction initiated by: </Text>
-                <Text style={{ fontSize: 10 }}> Alvin Indiazi</Text>
+                <Text style={{ fontSize: 10 }}> trustloop systems</Text>
               </View>
             </View>
           </>

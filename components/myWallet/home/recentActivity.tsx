@@ -60,7 +60,7 @@ export default function RecentActivity({
 const generateTableRows = (data:TransactionHistory[]|[]) => {
   return data
     .map((item) => {
-      const formattedItemDate = new Date(item.date_of_transaction).toLocaleString('en-US', {
+      const formattedItemDate = new Date(item.created_at).toLocaleString('en-US', {
         dateStyle: 'medium',
         timeStyle: 'short'
       });
@@ -487,7 +487,7 @@ const htmlStatement = `
                     </Text>
                   </View>
                   <View style={styles.activityDateTime}>
-                    <Text style={styles.activityDateTimeText}>{formatDate(item.date_of_transaction, "medium_date")}</Text>
+                    <Text style={styles.activityDateTimeText}>{formatDate(item.created_at, "medium_date")}</Text>
                   </View>
                 </View>
               </TouchableOpacity>

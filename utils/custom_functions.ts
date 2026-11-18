@@ -1,10 +1,17 @@
 type DateFormats = "long_date" | "short_date" | "medium_date";
 
 export const formatDate = (
-  date: Date | string,
+  date: Date | string | null | undefined, // 1. Added null | undefined to the type
   dateFormat: DateFormats,
 ): string => {
+  // 2. Guard Clause: If there is no date, return a fallback string immediately
+  if (!date) return "No date";
+
   const dateObj = typeof date === "string" ? new Date(date) : date;
+  
+  // 3. Guard Clause: Check if the date is actually a valid date object
+  if (isNaN(dateObj.getTime())) return "Invalid date";
+
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
 

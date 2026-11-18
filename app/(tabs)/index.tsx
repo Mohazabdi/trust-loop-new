@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuthContext } from "@/hooks/use-auth-context";
 import {
   RefreshControl,
   ScrollView,
@@ -7,65 +7,67 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Dimensions,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
-import type { StyleProp, ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { useTransactionHistory } from "@/hooks/useTransactionHistory";
 import {
-  ArrowDownCircle,
-  ArrowUpCircle,
-  Award,
   BellIcon,
-  BookOpen,
   ChevronRight,
-  Compass,
-  Gauge,
-  HandCoins,
-  PiggyBank,
-  Plus,
+  ChevronDown,
+  ChevronUp,
+  ArrowDownLeft,
+  ArrowUpRight,
   ShieldCheck,
-  TrendingDown,
+  Mail,
+  FileText,
+  Eye,
+  EyeOff,
+  Megaphone,
   TrendingUp,
-  Users,
-  Wallet,
+  AlertCircle,
+  X,
+  CheckCircle2,
 } from "lucide-react-native";
 
 import { GroupAvatar } from "@/components/myGroups/GroupAvatar";
-import { SaccoBadge } from "@/components/sacco/SaccoBadge";
-import CircularProgress from "@/components/myGroups/PieProgress";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { useMemberData } from "@/hooks/useMemberData";
 import { useUserWallet } from "@/hooks/useUserWallet";
 import { useWalletAccounts } from "@/hooks/useWalletAccounts";
-import { useGetMemberGroups } from "@/hooks/Usegetmembergroups";
+import { useGetMemberGroups } from "@/hooks/Usegetmembergroups"; 
 import { useMemberInvites } from "@/hooks/useMemberInvites";
-import {
-  useSaccoStorage,
-  netShareCapitalForMember,
-} from "@/store/useSaccoStorage";
-import { useSavingsStorage } from "@/store/useSavingsStorage";
+import { useSaccoStorage } from "@/store/useSaccoStorage";
 import { useTabBarBottomInset } from "@/lib/layout/tabBar";
+import { useWalletRealtime } from "@/hooks/useWalletRealTime";
+import { formatDate } from "@/utils/custom_functions";
 
-/* ------------------------------------------------------------------ */
-/*  Design tokens                                                     */
-/* ------------------------------------------------------------------ */
-
+/* ================================================================== */
+/*  DESIGN TOKENS & CONSTANTS                                         */
+/* ================================================================== */
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
 const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
-const TYPE = { caption: 11, label: 12, body: 14, h3: 16, h2: 20, h1: 26 } as const;
 
 const CLAY = {
-  canvas: "#E8EDF5",
-  surface: "#F3F6FB",
-  surfaceRaised: "#F7FAFE",
-  sunken: "#DFE6F0",
-  highlight: "#FFFFFF",
-  shade: "rgba(148, 163, 184, 0.55)",
-  shadeSoft: "rgba(148, 163, 184, 0.32)",
+  canvas: "#F5F7FA",
+  surface: "#FFFFFF",
+  sunken: "#EDF1F7",
   ink: "#1E293B",
   inkSoft: "#64748B",
   inkFaint: "#94A3B8",
-  hairline: "rgba(100, 116, 139, 0.12)",
+  hairline: "rgba(100, 116, 139, 0.1)",
+  shade: "rgba(148, 163, 184, 0.25)",
+  skeleton: "#E2E8F0",
 } as const;
 
 const ACCENT = {
@@ -73,2660 +75,688 @@ const ACCENT = {
   greenSoft: "#DBEFE1",
   red: "#CF6B6B",
   redSoft: "#FAE3E3",
-  purple: "#7A6AC0",
-  purpleSoft: "#E6E2F7",
   navy: "#4B6FA6",
   navySoft: "#E1E9F5",
+  purple: "#7A6AC0",
+  purpleSoft: "#E6E2F7",
   amber: "#C08A3E",
   amberSoft: "#F7EAD8",
-  teal: "#3D9A92",
-  tealSoft: "#DBEFED",
 } as const;
 
-const formatMoney = (n: number) =>
-  Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
-
-const formatCompactMoney = (n: number) => {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(Math.round(n));
+// 1. BULLETPROOF FORMAT MONEY
+const formatMoney = (n: number | undefined | null) => {
+  if (n === undefined || n === null) return "0";
+  return Math.round(n).toLocaleString("en-US", { maximumFractionDigits: 0 });
 };
 
-const formatMonth = (d: Date) =>
-  d.toLocaleDateString("en-US", { month: "short" });
+const TRUSTLOOP_NEWS = [
+  { id: "n1", title: "Chama Growth Report", desc: "Your active groups grew by 15% in contributions this month.", icon: TrendingUp, color: ACCENT.green, bg: ACCENT.greenSoft },
+  { id: "n2", title: "M-Pesa System Update", desc: "Faster deposit processing scheduled for this weekend.", icon: Megaphone, color: ACCENT.navy, bg: ACCENT.navySoft },
+  { id: "n3", title: "SACCO Dividends", desc: "New dividend payout calculations are now live. Check your SACCO tab.", icon: ShieldCheck, color: ACCENT.purple, bg: ACCENT.purpleSoft },
+];
 
-const formatShortDate = (d: Date) =>
-  d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const CARD_WIDTH = SCREEN_WIDTH * 0.65; 
+const CARD_HEIGHT = 150;
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                             */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  COMPONENT: MINI STATEMENT MODAL                                   */
+/* ================================================================== */
+const MiniStatementModal = ({ visible, onClose, userEmail }: { visible: boolean, onClose: () => void, userEmail: string }) => {
+  const [step, setStep] = useState<"select" | "loading" | "success" | "error">("select");
+  const [range, setRange] = useState<"7d" | "14d" | "30d">("7d");
+  const [email, setEmail] = useState(userEmail);
 
-type TimeRange = "30d" | "6m" | "1y";
+  const handleSend = () => {
+    setStep("loading");
+    setTimeout(() => {
+      setStep("success");
+    }, 2000);
+  };
 
-interface HealthScore {
-  total: number;
-  savings: number;
-  debt: number;
-  contribution: number;
-  diversification: number;
-  engagement: number;
-  consistency: number;
-  tier: "Building" | "Steady" | "Strong" | "Excellent";
-  tierColor: string;
-}
-
-interface Insight {
-  id: string;
-  tone: "positive" | "neutral" | "warning";
-  title: string;
-  body: string;
-}
-
-interface LiteracyCard {
-  id: string;
-  title: string;
-  body: string;
-}
-
-interface Circle {
-  kind: "community" | "sacco";
-  id: string;
-  name: string;
-  memberCount: number;
-  sasraCategory?: import("@/lib/types/sacco").SasraLicenseCategory;
-  sasraVerified?: boolean;
-}
-
-interface MonthBucket {
-  key: string;
-  label: string;
-  contributed: number;
-  withdrawn: number;
-  loans: number;
-  isCurrent: boolean;
-}
-
-interface GoalProjection {
-  id: string;
-  name: string;
-  contributed: number;
-  target: number;
-  pct: number;
-  monthlyRate: number;
-  etaLabel: string | null;
-  status: "on-track" | "slow" | "done";
-}
-
-interface Benchmark {
-  id: string;
-  circleName: string;
-  circleKind: "community" | "sacco";
-  myValue: number;
-  avgValue: number;
-  unit: "contribution" | "shares";
-  ratio: number;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Time helpers                                                      */
-/* ------------------------------------------------------------------ */
-
-function getRangeStart(range: TimeRange): Date {
-  const d = new Date();
-  if (range === "30d") d.setDate(d.getDate() - 30);
-  else if (range === "6m") d.setMonth(d.getMonth() - 6);
-  else d.setFullYear(d.getFullYear() - 1);
-  return d;
-}
-
-function getBucketCount(range: TimeRange): number {
-  return range === "30d" ? 6 : range === "6m" ? 6 : 12;
-}
-
-function bucketize(
-  events: { at: string; contributed: number; withdrawn: number; loans: number }[],
-  range: TimeRange
-): MonthBucket[] {
-  const now = new Date();
-  const count = getBucketCount(range);
-  const buckets: MonthBucket[] = [];
-
-  if (range === "30d") {
-    for (let i = count - 1; i >= 0; i--) {
-      const end = new Date(now);
-      end.setDate(end.getDate() - i * 5);
-      const start = new Date(end);
-      start.setDate(start.getDate() - 5);
-
-      let contributed = 0;
-      let withdrawn = 0;
-      let loans = 0;
-
-      events.forEach((e) => {
-        const t = new Date(e.at).getTime();
-        if (t >= start.getTime() && t < end.getTime()) {
-          contributed += e.contributed;
-          withdrawn += e.withdrawn;
-          loans += e.loans;
-        }
-      });
-
-      buckets.push({
-        key: `${start.toISOString()}-${end.toISOString()}`,
-        label: `${start.getDate()}/${start.getMonth() + 1}`,
-        contributed,
-        withdrawn,
-        loans,
-        isCurrent: i === 0,
-      });
-    }
-  } else {
-    for (let i = count - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      buckets.push({
-        key: `${d.getFullYear()}-${d.getMonth()}`,
-        label: formatMonth(d),
-        contributed: 0,
-        withdrawn: 0,
-        loans: 0,
-        isCurrent: i === 0,
-      });
-    }
-    events.forEach((e) => {
-      const t = new Date(e.at);
-      const key = `${t.getFullYear()}-${t.getMonth()}`;
-      const b = buckets.find((x) => x.key === key);
-      if (b) {
-        b.contributed += e.contributed;
-        b.withdrawn += e.withdrawn;
-        b.loans += e.loans;
-      }
-    });
-  }
-
-  return buckets;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Clay primitive                                                    */
-/* ------------------------------------------------------------------ */
-
-function Clay({
-  children,
-  color = CLAY.surface,
-  radius = RADIUS.lg,
-  highlight = CLAY.highlight,
-  shade = CLAY.shade,
-  depth = 1,
-  style,
-  bodyStyle,
-}: {
-  children: ReactNode;
-  color?: string;
-  radius?: number;
-  highlight?: string;
-  shade?: string;
-  depth?: number;
-  style?: StyleProp<ViewStyle>;
-  bodyStyle?: StyleProp<ViewStyle>;
-}) {
-  const offset = 4 + depth * 2;
-  const drop = offset + 2;
+  const resetAndClose = () => {
+    setStep("select");
+    onClose();
+  };
 
   return (
-    <View
-      style={[
-        {
-          backgroundColor: color,
-          borderRadius: radius,
-          shadowColor: shade,
-          shadowOffset: { width: drop, height: drop },
-          shadowOpacity: 1,
-          shadowRadius: drop * 1.9,
-          elevation: 3 + depth * 3,
-        },
-        style,
-      ]}
-    >
-      <View
-        style={[
-          {
-            backgroundColor: color,
-            borderRadius: radius,
-            shadowColor: highlight,
-            shadowOffset: { width: -offset, height: -offset },
-            shadowOpacity: 1,
-            shadowRadius: offset * 1.5,
-          },
-          bodyStyle,
-        ]}
-      >
-        {children}
-      </View>
-    </View>
+    <Modal visible={visible} transparent animationType="slide">
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalContent}>
+            
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Email Mini Statement</Text>
+              <TouchableOpacity onPress={resetAndClose}><X size={24} color={CLAY.ink} /></TouchableOpacity>
+            </View>
+
+            {step === "select" && (
+              <>
+                <Text style={styles.modalLabel}>Select Date Range</Text>
+                <View style={styles.rangeGrid}>
+                  {(["7d", "14d", "30d"] as const).map((r) => (
+                    <TouchableOpacity 
+                      key={r} 
+                      style={[styles.rangeBtn, range === r && styles.rangeBtnActive]}
+                      onPress={() => setRange(r)}
+                    >
+                      <Text style={[styles.rangeBtnText, range === r && styles.rangeBtnTextActive]}>
+                        {r === "7d" ? "Last 7 Days" : r === "14d" ? "Last 14 Days" : "Last 30 Days"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.modalLabel}>Send to Email</Text>
+                <TextInput 
+                  style={styles.modalInput} 
+                  value={email} 
+                  onChangeText={setEmail} 
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                
+                <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleSend}>
+                  <Mail size={20} color="#fff" />
+                  <Text style={styles.modalSubmitBtnText}>Send Statement</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {step === "loading" && (
+              <View style={styles.modalStateWrap}>
+                <ActivityIndicator size="large" color={ACCENT.green} />
+                <Text style={styles.modalStateTitle}>Generating Statement...</Text>
+                <Text style={styles.modalStateDesc}>We are compiling your records and sending to {email}</Text>
+              </View>
+            )}
+
+            {step === "success" && (
+              <View style={styles.modalStateWrap}>
+                <CheckCircle2 size={56} color={ACCENT.green} />
+                <Text style={styles.modalStateTitle}>Sent Successfully!</Text>
+                <Text style={styles.modalStateDesc}>Your mini statement has been sent to {email}. It may take up to 2 minutes to arrive.</Text>
+                <TouchableOpacity style={styles.modalSubmitBtn} onPress={resetAndClose}>
+                  <Text style={styles.modalSubmitBtnText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
   );
-}
+};
 
-/* ------------------------------------------------------------------ */
-/*  Screen                                                            */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  COMPONENT: FULL STATEMENT MODAL                                   */
+/* ================================================================== */
+const FullStatementModal = ({ visible, onClose, userEmail }: { visible: boolean, onClose: () => void, userEmail: string }) => {
+  const [step, setStep] = useState<"select" | "loading" | "success">("select");
+  const [month, setMonth] = useState<string>("");
+  const [email, setEmail] = useState(userEmail);
 
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const handleRequest = () => {
+    setStep("loading");
+    setTimeout(() => setStep("success"), 2500);
+  };
+
+  const resetAndClose = () => {
+    setStep("select");
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalContent}>
+            
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Full Statement</Text>
+              <TouchableOpacity onPress={resetAndClose}><X size={24} color={CLAY.ink} /></TouchableOpacity>
+            </View>
+
+            {step === "select" && (
+              <>
+                <Text style={styles.modalLabel}>Select Month to Audit</Text>
+                <View style={styles.rangeGrid}>
+                  {months.map((m) => (
+                    <TouchableOpacity 
+                      key={m} 
+                      style={[styles.rangeBtn, month === m && styles.rangeBtnActive]}
+                      onPress={() => setMonth(m)}
+                    >
+                      <Text style={[styles.rangeBtnText, month === m && styles.rangeBtnTextActive]}>{m} 2023</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.modalLabel}>Send to Email</Text>
+                <TextInput 
+                  style={styles.modalInput} 
+                  value={email} 
+                  onChangeText={setEmail} 
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                
+                <TouchableOpacity 
+                  style={[styles.modalSubmitBtn, !month && { opacity: 0.5 }]} 
+                  onPress={handleRequest}
+                  disabled={!month}
+                >
+                  <FileText size={20} color="#fff" />
+                  <Text style={styles.modalSubmitBtnText}>Request Statement</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {step === "loading" && (
+              <View style={styles.modalStateWrap}>
+                <ActivityIndicator size="large" color={ACCENT.navy} />
+                <Text style={styles.modalStateTitle}>Processing Request...</Text>
+                <Text style={styles.modalStateDesc}>Generating your full {month} statement. This may take a moment.</Text>
+              </View>
+            )}
+
+            {step === "success" && (
+              <View style={styles.modalStateWrap}>
+                <CheckCircle2 size={56} color={ACCENT.navy} />
+                <Text style={styles.modalStateTitle}>Request Received</Text>
+                <Text style={styles.modalStateDesc}>Your {month} statement is being prepared and will be emailed to {email} shortly.</Text>
+                <TouchableOpacity style={styles.modalSubmitBtn} onPress={resetAndClose}>
+                  <Text style={styles.modalSubmitBtnText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
+/* ================================================================== */
+/*  COMPONENT: SKELETON LOADING & ERROR STATES                        */
+/* ================================================================== */
+const SkeletonBox = ({ width, height, borderRadius = 8, style = {} }: any) => (
+  <View style={[{ width, height, borderRadius, backgroundColor: CLAY.skeleton }, style]} />
+);
+
+const HomeSkeleton = () => (
+  <View style={[styles.root, { padding: SPACING.xl }]}>
+    <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 60 }}>
+      <View>
+        <SkeletonBox width={120} height={16} style={{ marginBottom: 8 }} />
+        <SkeletonBox width={100} height={24} />
+      </View>
+      <SkeletonBox width={40} height={40} borderRadius={20} />
+    </View>
+    <View style={{ marginTop: SPACING.xxl }}>
+      <SkeletonBox width={100} height={16} style={{ marginBottom: 12 }} />
+      <SkeletonBox width={220} height={42} style={{ marginBottom: 16 }} />
+    </View>
+    <SkeletonBox width={CARD_WIDTH} height={CARD_HEIGHT} borderRadius={20} style={{ marginTop: SPACING.xxl }} />
+  </View>
+);
+
+const ErrorState = ({ onRetry }: { onRetry: () => void }) => (
+  <View style={[styles.root, { justifyContent: "center", alignItems: "center", padding: SPACING.xl }]}>
+    <AlertCircle size={48} color={ACCENT.red} />
+    <Text style={{ fontSize: 18, fontWeight: "700", color: CLAY.ink, marginTop: SPACING.md }}>Oops! Something went wrong</Text>
+    <TouchableOpacity onPress={onRetry} style={{ backgroundColor: ACCENT.green, padding: SPACING.md, borderRadius: RADIUS.md, marginTop: SPACING.xl }}>
+      <Text style={{ color: "#fff", fontWeight: "700" }}>Retry</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+/* ================================================================== */
+/*  MAIN COMPONENT: HOME DASHBOARD                                    */
+/* ================================================================== */
 export default function HomeScreen() {
   const router = useRouter();
   const { theme, setIsNotificationOpen } = useGlobalStorage();
   const tabBarInset = useTabBarBottomInset();
+  const { claims } = useAuthContext(); 
 
-  const styles = useMemo(() => makeStyles(theme), [theme]);
+  /* ── UI State ── */
   const [refreshing, setRefreshing] = useState(false);
-  const [range, setRange] = useState<TimeRange>("6m");
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [txFilter, setTxFilter] = useState<"all" | "in" | "out">("all");
+  const [isTxExpanded, setIsTxExpanded] = useState(false);
+  const [isDataVisible, setIsDataVisible] = useState(true);
+  
+  const [isMiniModalOpen, setIsMiniModalOpen] = useState(false);
+  const [isFullModalOpen, setIsFullModalOpen] = useState(false);
 
-  /* ── Data ─────────────────────────────────────────────── */
-  const { data: member, refetch: refetchMember } = useMemberData();
-  const memberId = member?.id;
+  /* ── News Carousel Auto-Slide Logic ── */
+  const [newsIndex, setNewsIndex] = useState(0);
+  const newsScrollRef = useRef<ScrollView>(null);
 
-  const { data: wallet, refetch: refetchWallet } = useUserWallet(memberId);
-  const { data: accounts, refetch: refetchAccounts } = useWalletAccounts(
-    wallet?.wallet_id
-  );
-
-  const { groups: myGroups, refetch: refetchGroups } = useGetMemberGroups();
-  const { invites: pendingInvites, refetch: refetchInvites } =
-    useMemberInvites(memberId);
-
-  const allSaccos = useSaccoStorage((s) => s.saccos);
-  const allSavingsPlans = useSavingsStorage((s) => s.plans);
-
-  /* ── Greeting ─────────────────────────────────────────── */
-  const greeting = useMemo(() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 17) return "Good afternoon";
-    return "Good evening";
+  useEffect(() => {
+    const timer = setInterval(() => setNewsIndex((prev) => (prev + 1) % TRUSTLOOP_NEWS.length), 6000);
+    return () => clearInterval(timer);
   }, []);
 
-  const firstName = member?.first_name ?? "there";
+  useEffect(() => {
+    if (newsScrollRef.current) {
+      newsScrollRef.current.scrollTo({ x: newsIndex * (CARD_WIDTH + SPACING.md), animated: true });
+    }
+  }, [newsIndex]);
 
-  /* ── Wallet ───────────────────────────────────────────── */
+  /* ── REAL DATA HOOKS ── */
+  const { data: member, refetch: refetchMember, isLoading: isMemberLoading, isError: isMemberError } = useMemberData();
+  const memberId = member?.id;
+
+  const { data: wallet, refetch: refetchWallet, isLoading: isWalletLoading, isError: isWalletError } = useUserWallet(memberId);
+  const { data: accounts, refetch: refetchAccounts, isLoading: isAccountsLoading } = useWalletAccounts(wallet?.wallet_id);
+  
+  const { groups: myGroups, refetch: refetchGroups } = useGetMemberGroups(); 
+  const { invites: pendingInvites, refetch: refetchInvites } = useMemberInvites(memberId);
+
+  useWalletRealtime(wallet?.wallet_id);
+
+  const { 
+    data: realTransactions, 
+    refetch: refetchTransactions,
+    isLoading: isTxLoading 
+  } = useTransactionHistory(memberId);
+  
+  const allSaccos = useSaccoStorage((s) => s.saccos);
+
+  // 2. MASTER LOADING STATE (INCLUDES TRANSACTIONS)
+  const isInitialLoading = isMemberLoading || isWalletLoading || isAccountsLoading || isTxLoading;
+  const hasError = isMemberError || isWalletError;
+
+  /* ── Computed Data ── */
+  const firstName = member?.first_name ?? "customer";
+  const userEmail = claims?.email ?? "customer@trustloop.com";
+
+  const greeting = useMemo(() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Habari ya asubuhi";
+    if (h < 17) return "Habari ya mchana";
+    return "Habari ya jioni";
+  }, []);
+
   const walletBalance = useMemo(
-    () =>
-      (accounts ?? []).reduce(
-        (sum, a) => sum + (a.available_balance ?? 0),
-        0
-      ),
+    () => (accounts ?? []).reduce((sum, a) => sum + (a.available_balance ?? 0), 0),
     [accounts]
   );
 
-  const currencyCode = accounts?.[0]?.currency_code ?? "KES";
-
-  /* ── My circles ───────────────────────────────────────── */
   const mySaccos = useMemo(
-    () =>
-      allSaccos.filter((s) =>
-        s.members.some(
-          (m) => m.group_member_id === memberId && m.status === "active"
-        )
-      ),
+    () => allSaccos.filter((s) => s.members.some((m) => m.group_member_id === memberId && m.status === "active")),
     [allSaccos, memberId]
   );
 
-  const mySavingsPlans = useMemo(
-    () =>
-      allSavingsPlans.filter((p) =>
-        p.members.some(
-          (m) => m.group_member_id === memberId && m.status === "active"
-        )
-      ),
-    [allSavingsPlans, memberId]
-  );
-
-  /* ── Ledger (all-time aggregate) ──────────────────────── */
-  const ledger = useMemo(() => {
-    let shareCapital = 0;
-    let loansOutstanding = 0;
-    let loansRepaid = 0;
-    let dividendsEarned = 0;
-
-    mySaccos.forEach((s) => {
-      const myRow = s.members.find((m) => m.group_member_id === memberId);
-      if (!myRow) return;
-      shareCapital += netShareCapitalForMember(s, myRow.id);
-      s.loans.forEach((l) => {
-        if (l.member_row_id !== myRow.id) return;
-        const repaid = l.repayments.reduce((sum, r) => sum + r.amount, 0);
-        loansRepaid += repaid;
-        loansOutstanding += Math.max(l.amount - repaid, 0);
-      });
-      s.dividend_declarations.forEach((d) => {
-        const alloc = d.allocations.find((a) => a.member_row_id === myRow.id);
-        dividendsEarned += alloc?.net_payout ?? 0;
-      });
-    });
-
-    let savingsContributed = 0;
-    let savingsTarget = 0;
-    let savingsWithdrawn = 0;
-
-    mySavingsPlans.forEach((p) => {
-      savingsTarget += p.target_amount;
-      p.contributions.forEach((c) => {
-        if (c.amount > 0) savingsContributed += c.amount;
-        else savingsWithdrawn += Math.abs(c.amount);
-      });
-    });
-
-    const netWorth =
-      walletBalance + shareCapital + (savingsContributed - savingsWithdrawn);
-
-    return {
-      shareCapital,
-      loansOutstanding,
-      loansRepaid,
-      dividendsEarned,
-      savingsContributed,
-      savingsTarget,
-      savingsWithdrawn,
-      netWorth,
-    };
-  }, [mySaccos, mySavingsPlans, walletBalance, memberId]);
-
-  /* ── Unified event stream for time-bucketed charts ─────── */
-  const eventStream = useMemo(() => {
-    const events: {
-      at: string;
-      contributed: number;
-      withdrawn: number;
-      loans: number;
-    }[] = [];
-
-    mySavingsPlans.forEach((p) => {
-      p.contributions.forEach((c) => {
-        events.push({
-          at: c.contributed_at,
-          contributed: c.amount > 0 ? c.amount : 0,
-          withdrawn: c.amount < 0 ? Math.abs(c.amount) : 0,
-          loans: 0,
-        });
-      });
-    });
-
-    mySaccos.forEach((s) => {
-      const myRow = s.members.find((m) => m.group_member_id === memberId);
-      if (!myRow) return;
-      s.loans.forEach((l) => {
-        if (l.member_row_id !== myRow.id) return;
-        l.repayments.forEach((r) => {
-          events.push({
-            at: r.paid_at,
-            contributed: 0,
-            withdrawn: 0,
-            loans: r.amount,
-          });
-        });
-      });
-    });
-
-    return events;
-  }, [mySavingsPlans, mySaccos, memberId]);
-
-  /* ── Buckets for the chart ────────────────────────────── */
-  const buckets = useMemo(
-    () => bucketize(eventStream, range),
-    [eventStream, range]
-  );
-
-  const rangeTotalIn = useMemo(
-    () => buckets.reduce((s, b) => s + b.contributed, 0),
-    [buckets]
-  );
-
-  const rangeTotalOut = useMemo(
-    () => buckets.reduce((s, b) => s + b.withdrawn + b.loans, 0),
-    [buckets]
-  );
-
-  const rangeNet = rangeTotalIn - rangeTotalOut;
-
-  /* ── Period-over-period change ────────────────────────── */
-  const momChange = useMemo(() => {
-    if (buckets.length < 2) return 0;
-    const current = buckets[buckets.length - 1].contributed;
-    const previous = buckets[buckets.length - 2].contributed;
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return Math.round(((current - previous) / previous) * 100);
-  }, [buckets]);
-
-  const ratios = useMemo(() => {
-    const denom = rangeTotalIn + walletBalance;
-    const savingsRate = denom > 0 ? (rangeTotalIn / denom) * 100 : 0;
-
-    const totalBorrowed = ledger.loansOutstanding + ledger.loansRepaid;
-    const debtLoad =
-      totalBorrowed > 0 ? (ledger.loansOutstanding / totalBorrowed) * 100 : 0;
-
-    const monthlyOutflow =
-      range === "30d"
-        ? rangeTotalOut
-        : rangeTotalOut / (range === "6m" ? 6 : 12);
-    const liquidityMonths =
-      monthlyOutflow > 0
-        ? walletBalance / monthlyOutflow
-        : walletBalance > 0
-        ? 12
-        : 0;
-
-    return {
-      savingsRate: Math.min(savingsRate, 100),
-      debtLoad,
-      totalBorrowed,
-      liquidityMonths: Math.min(liquidityMonths, 24),
-    };
-  }, [rangeTotalIn, rangeTotalOut, walletBalance, ledger, range]);
-
-  /* ── Health score ─────────────────────────────────────── */
-  const health: HealthScore = useMemo(() => {
-    const planProgress =
-      mySavingsPlans.length > 0
-        ? mySavingsPlans.reduce((sum, p) => {
-            const contributed = p.contributions.reduce(
-              (s, c) => s + c.amount,
-              0
-            );
-            const pct =
-              p.target_amount > 0
-                ? Math.min((contributed / p.target_amount) * 100, 100)
-                : 0;
-            return sum + pct;
-          }, 0) / mySavingsPlans.length
-        : 0;
-    const savingsScore = (planProgress / 100) * 25;
-
-    const totalBorrowed = ledger.loansOutstanding + ledger.loansRepaid;
-    const repaidRatio =
-      totalBorrowed > 0 ? ledger.loansRepaid / totalBorrowed : 1;
-    const debtScore = 20 * (0.5 + 0.5 * repaidRatio);
-
-    const now = Date.now();
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-    let recentContributions = 0;
-    let allContributions = 0;
-    mySavingsPlans.forEach((p) => {
-      p.contributions.forEach((c) => {
-        if (c.amount <= 0) return;
-        allContributions += 1;
-        if (new Date(c.contributed_at).getTime() > thirtyDaysAgo) {
-          recentContributions += 1;
-        }
-      });
-    });
-    const contributionScore = Math.min(
-      20,
-      recentContributions * 2.5 + Math.min(allContributions * 0.4, 8)
-    );
-
-    const circleCount = (myGroups?.length ?? 0) + mySaccos.length;
-    let divScore = 0;
-    if (circleCount >= 1) divScore += 5;
-    if (circleCount >= 2) divScore += 4;
-    if (circleCount >= 3) divScore += 3;
-    if (mySavingsPlans.length > 0) divScore += 3;
-    const diversificationScore = Math.min(divScore, 15);
-
-    const activeCircles = mySaccos.filter((s) => {
-      const myRow = s.members.find((m) => m.group_member_id === memberId);
-      if (!myRow) return false;
-      const hasShares = s.share_purchases.some(
-        (p) => p.member_row_id === myRow.id
-      );
-      const hasLoans = s.loans.some((l) => l.member_row_id === myRow.id);
-      return hasShares || hasLoans;
-    }).length;
-    const engagementScore = Math.min(activeCircles * 3 + 2, 10);
-
-    const bucketsWithContribs = buckets.filter((b) => b.contributed > 0).length;
-    const consistencyScore =
-      buckets.length > 0 ? (bucketsWithContribs / buckets.length) * 10 : 0;
-
-    const total = Math.round(
-      savingsScore +
-        debtScore +
-        contributionScore +
-        diversificationScore +
-        engagementScore +
-        consistencyScore
-    );
-
-    let tier: HealthScore["tier"] = "Building";
-    let tierColor: string = ACCENT.amber;
-    if (total >= 80) {
-      tier = "Excellent";
-      tierColor = ACCENT.green;
-    } else if (total >= 60) {
-      tier = "Strong";
-      tierColor = ACCENT.teal;
-    } else if (total >= 40) {
-      tier = "Steady";
-      tierColor = ACCENT.navy;
-    }
-
-    return {
-      total,
-      savings: Math.round(savingsScore),
-      debt: Math.round(debtScore),
-      contribution: Math.round(contributionScore),
-      diversification: Math.round(diversificationScore),
-      engagement: Math.round(engagementScore),
-      consistency: Math.round(consistencyScore),
-      tier,
-      tierColor,
-    };
-  }, [
-    mySavingsPlans,
-    mySaccos,
-    myGroups,
-    walletBalance,
-    ledger,
-    buckets,
-    memberId,
-  ]);
-
-  /* ── Insights ─────────────────────────────────────────── */
-  const insights: Insight[] = useMemo(() => {
-    const out: Insight[] = [];
-    const circleCount = (myGroups?.length ?? 0) + mySaccos.length;
-
-    if (mySavingsPlans.length > 0) {
-      const withProgress = mySavingsPlans.map((p) => {
-        const contributed = p.contributions.reduce((s, c) => s + c.amount, 0);
-        const pct =
-          p.target_amount > 0
-            ? Math.min(Math.round((contributed / p.target_amount) * 100), 100)
-            : 0;
-        return { name: p.savings_name, pct };
-      });
-      const slowest = [...withProgress].sort((a, b) => a.pct - b.pct)[0];
-      if (slowest && slowest.pct < 30) {
-        out.push({
-          id: "slow-progress",
-          tone: "warning",
-          title: `${slowest.name} needs attention`,
-          body: `You're at ${slowest.pct}% of target. A small top-up this week can push you past the next milestone.`,
-        });
-      } else if (slowest && slowest.pct >= 75) {
-        out.push({
-          id: "near-complete",
-          tone: "positive",
-          title: `${slowest.name} is close to done`,
-          body: `${slowest.pct}% of the way there. One or two more contributions finishes it.`,
-        });
-      }
-    } else if (circleCount > 0) {
-      out.push({
-        id: "no-savings",
-        tone: "neutral",
-        title: "Start a savings plan",
-        body: "You're part of a circle but haven't started saving yet. A small monthly target is the easiest first step.",
-      });
-    }
-
-    if (ledger.loansOutstanding > 0) {
-      const totalBorrowed = ledger.loansOutstanding + ledger.loansRepaid;
-      const repaidPct =
-        totalBorrowed > 0
-          ? Math.round((ledger.loansRepaid / totalBorrowed) * 100)
-          : 0;
-
-      if (repaidPct < 35) {
-        out.push({
-          id: "loan-progress",
-          tone: "warning",
-          title: "Loan repayment needs attention",
-          body: `You've cleared ${repaidPct}% of everything you've borrowed. ${currencyCode} ${formatMoney(
-            ledger.loansOutstanding
-          )} is still outstanding — paying ahead of schedule reduces the interest you owe.`,
-        });
-      } else {
-        out.push({
-          id: "loan-progress",
-          tone: "positive",
-          title: "Loan repayment is on track",
-          body: `You've cleared ${repaidPct}% of your total borrowing. ${currencyCode} ${formatMoney(
-            ledger.loansOutstanding
-          )} remains outstanding.`,
-        });
-      }
-    }
-
-    if (circleCount === 0) {
-      out.push({
-        id: "no-circles",
-        tone: "neutral",
-        title: "Join a circle",
-        body: "Community groups and SACCOs help members save together and access credit as a group.",
-      });
-    } else if (circleCount >= 3 && mySavingsPlans.length === 0) {
-      out.push({
-        id: "add-savings",
-        tone: "neutral",
-        title: "Add a savings plan",
-        body: "You're in several circles. A savings plan gives your cash a specific goal to work toward.",
-      });
-    }
-
-    if (ledger.dividendsEarned > 0) {
-      out.push({
-        id: "dividend-earned",
-        tone: "positive",
-        title: `You've earned ${currencyCode} ${formatMoney(
-          ledger.dividendsEarned
-        )} in dividends`,
-        body: "Share dividends compound over time. Buying more shares increases your future payouts.",
-      });
-    }
-
-    return out.slice(0, 3);
-  }, [
-    mySavingsPlans,
-    myGroups,
-    mySaccos,
-    ledger,
-    walletBalance,
-    currencyCode,
-  ]);
-
-  /* ── Financial literacy cards ─────────────────────────── */
-  const literacy: LiteracyCard[] = useMemo(() => {
-    const cards: LiteracyCard[] = [];
-
-    if (ratios.debtLoad >= 50) {
-      cards.push({
-        id: "lit-debt",
-        title: "Why reducing debt early saves money",
-        body: "Interest is charged on the outstanding balance. Paying extra in the first months of a loan cuts total interest far more than paying the same extra later.",
-      });
-    }
-
-    if (ratios.liquidityMonths < 3 && walletBalance > 0) {
-      cards.push({
-        id: "lit-emergency",
-        title: "Emergency funds matter",
-        body: "Financial planners recommend holding 3–6 months of expenses in cash. It stops you from borrowing when something unexpected happens.",
-      });
-    }
-
-    if (ratios.savingsRate < 20 && rangeTotalIn > 0) {
-      cards.push({
-        id: "lit-savings-rate",
-        title: "Aim for a 20% savings rate",
-        body: "For every KES 100 that comes in, try to keep KES 20. Small consistent savings beat large one-off contributions.",
-      });
-    }
-
-    if (
-      (myGroups?.length ?? 0) + mySaccos.length >= 2 &&
-      mySavingsPlans.length === 0
-    ) {
-      cards.push({
-        id: "lit-compound",
-        title: "Small amounts, big compounding",
-        body: "A KES 1,000 monthly savings plan earning 8% becomes roughly KES 180,000 in 10 years. Time does most of the work.",
-      });
-    }
-
-    if (ledger.dividendsEarned > 0) {
-      cards.push({
-        id: "lit-dividends",
-        title: "How SACCO dividends work",
-        body: "Dividends are paid on share capital, not on deposits. Buying more shares increases your share of the annual payout.",
-      });
-    }
-
-    if (cards.length === 0) {
-      cards.push({
-        id: "lit-baseline",
-        title: "Build the habit first",
-        body: "The best savings plan is one you can keep. Start with an amount that feels almost too small and increase it every quarter.",
-      });
-    }
-
-    return cards.slice(0, 3);
-  }, [
-    ratios,
-    walletBalance,
-    rangeTotalIn,
-    myGroups,
-    mySaccos,
-    mySavingsPlans,
-    ledger.dividendsEarned,
-  ]);
-
-  /* ── Goal projections ─────────────────────────────────── */
-  const goals: GoalProjection[] = useMemo(() => {
-    return mySavingsPlans.map((p) => {
-      const contributed = p.contributions.reduce((s, c) => s + c.amount, 0);
-      const pct =
-        p.target_amount > 0
-          ? Math.min(Math.round((contributed / p.target_amount) * 100), 100)
-          : 0;
-
-      const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
-      const recentContribs = p.contributions.filter(
-        (c) => c.amount > 0 && new Date(c.contributed_at).getTime() > cutoff
-      );
-      const recentTotal = recentContribs.reduce((s, c) => s + c.amount, 0);
-      const monthlyRate = recentTotal / 3;
-
-      let etaLabel: string | null = null;
-      if (pct < 100 && monthlyRate > 0) {
-        const remaining = p.target_amount - contributed;
-        const months = Math.ceil(remaining / monthlyRate);
-        const eta = new Date();
-        eta.setMonth(eta.getMonth() + months);
-        etaLabel = formatShortDate(eta);
-      }
-
-      let status: GoalProjection["status"] = "on-track";
-      if (pct >= 100) status = "done";
-      else if (monthlyRate === 0) status = "slow";
-
-      return {
-        id: p.savings_plan_id,
-        name: p.savings_name,
-        contributed,
-        target: p.target_amount,
-        pct,
-        monthlyRate,
-        etaLabel,
-        status,
-      };
-    });
-  }, [mySavingsPlans]);
-
-  /* ── Peer benchmarks ──────────────────────────────────── */
-  const benchmarks: Benchmark[] = useMemo(() => {
-    const out: Benchmark[] = [];
-
-    mySaccos.forEach((s) => {
-      const myRow = s.members.find((m) => m.group_member_id === memberId);
-      if (!myRow) return;
-      const myValue = netShareCapitalForMember(s, myRow.id);
-      const others = s.members.filter(
-        (m) => m.status === "active" && m.id !== myRow.id
-      );
-      if (others.length === 0) return;
-      const avg =
-        others.reduce(
-          (sum, m) => sum + netShareCapitalForMember(s, m.id),
-          0
-        ) / others.length;
-      out.push({
-        id: `bench-sacco-${s.sacco_id}`,
-        circleName: s.group_name,
-        circleKind: "sacco",
-        myValue,
-        avgValue: avg,
-        unit: "shares",
-        ratio: avg > 0 ? myValue / avg : 0,
-      });
-    });
-
-    mySavingsPlans.forEach((p) => {
-      const myRow = p.members.find((m) => m.group_member_id === memberId);
-      if (!myRow) return;
-      const myValue = p.contributions
-        .filter((c) => c.group_member_id === memberId)
-        .reduce((s, c) => s + c.amount, 0);
-      const others = p.members.filter(
-        (m) => m.status === "active" && m.group_member_id !== memberId
-      );
-      if (others.length === 0) return;
-      const avg =
-        others.reduce((sum, m) => {
-          const contributed = p.contributions
-            .filter((c) => c.group_member_id === m.group_member_id)
-            .reduce((s, c) => s + c.amount, 0);
-          return sum + contributed;
-        }, 0) / others.length;
-      out.push({
-        id: `bench-plan-${p.savings_plan_id}`,
-        circleName: p.savings_name,
-        circleKind: "community",
-        myValue,
-        avgValue: avg,
-        unit: "contribution",
-        ratio: avg > 0 ? myValue / avg : 0,
-      });
-    });
-
-    return out.slice(0, 2);
-  }, [mySaccos, mySavingsPlans, memberId]);
-
-  /* ── Pending approvals ────────────────────────────────── */
-  const pendingLoanApprovals = useMemo(() => {
-    let count = 0;
-    mySaccos.forEach((s) => {
-      const myRow = s.members.find((m) => m.group_member_id === memberId);
-      if (!myRow) return;
-      s.loans.forEach((l) => {
-        if (
-          l.status === "pending" &&
-          l.member_row_id !== myRow.id &&
-          !l.approvals.some((a) => a.member_row_id === myRow.id)
-        ) {
-          count += 1;
-        }
-      });
-    });
-    return count;
-  }, [mySaccos, memberId]);
-
-  const pendingWithdrawalApprovals = useMemo(() => {
-    let count = 0;
-    mySavingsPlans.forEach((p) => {
-      const myRow = p.members.find((m) => m.group_member_id === memberId);
-      if (!myRow) return;
-      (p.withdrawal_requests ?? []).forEach((w) => {
-        if (
-          w.status === "pending" &&
-          w.requested_by_id !== memberId &&
-          !w.approvals.some((a) => a.group_member_id === memberId)
-        ) {
-          count += 1;
-        }
-      });
-    });
-    return count;
-  }, [mySavingsPlans, memberId]);
-
-  const totalPendingApprovals =
-    pendingLoanApprovals + pendingWithdrawalApprovals;
-
-  /* ── Circles ──────────────────────────────────────────── */
-  const circles: Circle[] = useMemo(() => {
-    const community: Circle[] = (myGroups ?? []).map((g: any) => ({
-      kind: "community",
-      id: g.group_id,
-      name: g.group_name,
-      memberCount: g.number_of_members ?? 0,
+  const circles = useMemo(() => {
+    const community = (myGroups ?? []).map((g: any) => ({
+      id: g.group_id, name: g.group_name, kind: "community", memberCount: g.number_of_members ?? 0,
     }));
-
-    const saccoList: Circle[] = mySaccos.map((s) => ({
-      kind: "sacco",
-      id: s.sacco_id,
-      name: s.group_name,
-      memberCount: s.members.filter((m) => m.status === "active").length,
-      sasraCategory: s.sasra_license_category,
-      sasraVerified: !!s.sasra_verified_at,
+    const saccos = mySaccos.map((s) => ({
+      id: s.sacco_id, name: s.group_name, kind: "sacco", memberCount: s.members.filter((m) => m.status === "active").length,
     }));
-
-    return [...community, ...saccoList];
+    return [...community, ...saccos];
   }, [myGroups, mySaccos]);
 
-  const visibleCircles = circles.slice(0, 3);
-  const remainingCircles = Math.max(circles.length - visibleCircles.length, 0);
+  const actionCenterGroups = useMemo(() => {
+    const groupsWithActions: Record<string, { name: string; kind: "community" | "sacco"; actions: any[] }> = {};
+    if ((pendingInvites ?? []).length > 0) {
+      groupsWithActions["invites"] = {
+        name: "Pending Invites", kind: "community",
+        actions: pendingInvites.map((i: any) => ({ id: i.id, title: `Invite to join ${i.group_name || "a group"}`, type: "invite" })),
+      };
+    }
+    circles.slice(0, 2).forEach((circle) => {
+      if (!circle?.id) return;
+      groupsWithActions[circle.id] = {
+        name: circle.name, kind: circle.kind as any,
+        actions: [{ id: "a1", title: "penalty reminder", type: "penalty" }, { id: "a2", title: "Contribution due", type: "contribution" }],
+      };
+    });
+    return Object.entries(groupsWithActions).map(([id, data]) => ({ id, ...data }));
+  }, [circles, pendingInvites]);
 
-  const invitesBadge = pendingInvites.length;
+  // 3. PROPER SUPABASE DATA MAPPING
+  const displayedTransactions = useMemo(() => {
+    let filtered = realTransactions ?? [];
+    
+    // Map the UI filter ("in" / "out") to the Supabase database ("credit" / "debit")
+    if (txFilter === "in") filtered = filtered.filter((t) => t.entry_type === "credit");
+    if (txFilter === "out") filtered = filtered.filter((t) => t.entry_type === "debit");
+    
+    const limit = (txFilter === "all" && isTxExpanded) ? 10 : 5;
+    
+    // Map to UI expected fields
+    return filtered.slice(0, limit).map((tx) => ({
+      id: tx.id,
+      type: tx.entry_type === "credit" ? "in" : "out",
+      title: tx.trans_category || "Transaction",
+      amount: tx.entry_amount || 0,
+      group: tx.account_involved || "Wallet",
+      created_at: tx.created_at,
+    }));
+  }, [txFilter, isTxExpanded, realTransactions]);
 
-  /* ── Handlers ─────────────────────────────────────────── */
+  /* ── Handlers ── */
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
       await Promise.all([
-        refetchMember(),
-        refetchWallet(),
-        refetchAccounts(),
-        refetchGroups(),
-        refetchInvites(),
+        refetchMember(), refetchWallet(), refetchAccounts(), refetchGroups(), refetchInvites(), refetchTransactions()
       ]);
     } finally {
       setRefreshing(false);
     }
-  }, [
-    refetchMember,
-    refetchWallet,
-    refetchAccounts,
-    refetchGroups,
-    refetchInvites,
-  ]);
+  }, [refetchMember, refetchWallet, refetchAccounts, refetchGroups, refetchInvites, refetchTransactions]);
 
-  const handleNotifications = useCallback(
-    () => setIsNotificationOpen(true),
-    [setIsNotificationOpen]
-  );
+  const toggleAccordion = (id: string) => setExpandedGroupId((prev) => (prev === id ? null : id));
+  const handleFilterPress = (filter: "all" | "in" | "out") => {
+    setTxFilter(filter);
+    if (filter !== "all") setIsTxExpanded(false);
+  };
 
-  const goToGroups = useCallback(() => router.push("/(tabs)/groups"), [router]);
-  const goToWallet = useCallback(() => router.push("/(tabs)/wallet"), [router]);
+  const goToWallet = () => router.push("/(tabs)/wallet");
+  const goToGroups = () => router.push("/(tabs)/groups");
 
-  const goToCircle = useCallback(
-    (circle: Circle) => {
-      if (circle.kind === "sacco") {
-        router.push({
-          pathname: "/(tabs)/groups/sacco/home",
-          params: { sacco_id: circle.id, group_member_id: memberId },
-        });
-      } else {
-        router.push({
-          pathname: "/(tabs)/groups/group",
-          params: { group_id: circle.id },
-        });
-      }
-    },
-    [router, memberId]
-  );
+  if (isInitialLoading) return <HomeSkeleton />;
+  if (hasError) return <ErrorState onRetry={handleRefresh} />;
 
-  const hasAttention = pendingInvites.length > 0 || totalPendingApprovals > 0;
-
-  const chartMax = useMemo(() => {
-    let m = 0;
-    buckets.forEach((b) => {
-      m = Math.max(m, b.contributed, b.withdrawn + b.loans);
-    });
-    return m || 1;
-  }, [buckets]);
-
-  /* ── Render ───────────────────────────────────────────── */
   return (
-    <SafeAreaView style={styles.root} edges={["top"]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: tabBarInset + SPACING.xxl },
-        ]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={theme.primary}
-            colors={[theme.primary]}
-          />
-        }
-      >
-        {/* ── Header ─────────────────────────────────────── */}
-        <View style={styles.header}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.greeting}>{greeting}</Text>
-            <Text style={styles.name} numberOfLines={1}>
-              {firstName}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={handleNotifications}
-            activeOpacity={0.9}
-            accessibilityRole="button"
-            accessibilityLabel="Notifications"
-            style={styles.bellWrap}
-          >
-            <Clay
-              radius={16}
-              depth={0}
-              bodyStyle={styles.bellBody}
-              style={styles.bellShell}
-            >
-              <BellIcon size={19} color={CLAY.ink} strokeWidth={2.2} />
-            </Clay>
-            {invitesBadge > 0 ? (
-              <View style={styles.bellBadge}>
-                <Text style={styles.bellBadgeText}>
-                  {invitesBadge > 9 ? "9+" : invitesBadge}
-                </Text>
-              </View>
-            ) : null}
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Net worth slab ─────────────────────────────── */}
-        <Clay
-          color={theme.primary}
-          radius={RADIUS.xl}
-          depth={2}
-          highlight="rgba(255,255,255,0.34)"
-          shade="rgba(12, 45, 22, 0.42)"
-          style={styles.heroShell}
-          bodyStyle={styles.hero}
+    <View style={styles.root}>
+      <LinearGradient colors={["#E8F5E9", "#F5F7FA"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0.4 }} style={StyleSheet.absoluteFillObject} />
+      
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{ paddingBottom: tabBarInset + 150 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
         >
-          <View pointerEvents="none" style={styles.heroGlowA} />
-          <View pointerEvents="none" style={styles.heroGlowB} />
-
-          <View style={styles.heroTop}>
-            <View style={styles.heroEyebrowRow}>
-              <Wallet size={12} color="#fff" strokeWidth={2.6} />
-              <Text style={styles.heroEyebrow}>NET WORTH</Text>
+          {/* 1. Header */}
+          <View style={styles.header}>
+            <View style={{ flex: 1, marginTop: 50 }}>
+              <Text style={styles.greeting}>{greeting}</Text>
+              <Text style={styles.name}>{firstName}</Text>
             </View>
-            <TouchableOpacity
-              onPress={goToWallet}
-              hitSlop={10}
-              style={styles.heroLink}
-            >
-              <Text style={styles.heroLinkText}>Open wallet</Text>
-              <ChevronRight size={13} color="#fff" strokeWidth={2.8} />
+            <TouchableOpacity onPress={() => setIsNotificationOpen(true)} style={styles.bellWrap}>
+              <BellIcon size={24} color={CLAY.ink} strokeWidth={2} />
+              {pendingInvites.length > 0 && <View style={styles.bellBadge} />}
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.heroAmount} numberOfLines={1}>
-            {currencyCode} {formatMoney(ledger.netWorth)}
-          </Text>
-
-          <View style={styles.heroChangeRow}>
-            {momChange !== 0 ? (
-              <>
-                {momChange > 0 ? (
-                  <TrendingUp size={12} color="#D6F5DF" strokeWidth={2.6} />
-                ) : (
-                  <TrendingDown size={12} color="#FBDCDC" strokeWidth={2.6} />
-                )}
-                <Text style={styles.heroChangeText}>
-                  {momChange > 0 ? "+" : ""}
-                  {momChange}% vs last period
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.heroChangeText}>
-                No change since last period
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.heroBreakdown}>
-            <Breakdown
-              label="Wallet"
-              value={formatCompactMoney(walletBalance)}
-              styles={styles}
-            />
-            <Breakdown
-              label="Share capital"
-              value={formatCompactMoney(ledger.shareCapital)}
-              styles={styles}
-            />
-            <Breakdown
-              label="Savings"
-              value={formatCompactMoney(
-                Math.max(ledger.savingsContributed - ledger.savingsWithdrawn, 0)
-              )}
-              styles={styles}
-            />
-          </View>
-        </Clay>
-
-        {/* ── Range selector ─────────────────────────────── */}
-        <View style={styles.segmentWrap}>
-          {(["30d", "6m", "1y"] as TimeRange[]).map((r) => {
-            const selected = range === r;
-            const label =
-              r === "30d" ? "30 days" : r === "6m" ? "6 months" : "1 year";
-            return (
-              <TouchableOpacity
-                key={r}
-                onPress={() => setRange(r)}
-                activeOpacity={0.9}
-                style={[styles.segmentBtn, selected && styles.segmentBtnActive]}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    selected && styles.segmentTextActive,
-                  ]}
-                >
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* ── Cash flow ──────────────────────────────────── */}
-        <Clay style={styles.block} bodyStyle={styles.cardBody}>
-          <View style={styles.chartHeader}>
-            <View style={{ gap: 2 }}>
-              <Text style={styles.chartTitle}>Cash flow</Text>
-              <Text style={styles.chartSubtitle}>
-                In versus out over the selected range
-              </Text>
-            </View>
-            <View style={styles.chartNetWrap}>
-              <Text style={styles.chartNetLabel}>Net</Text>
-              <Text
-                style={[
-                  styles.chartNetValue,
-                  { color: rangeNet >= 0 ? ACCENT.green : ACCENT.red },
-                ]}
-              >
-                {rangeNet >= 0 ? "+" : "−"}
-                {formatCompactMoney(Math.abs(rangeNet))}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.barsRow}>
-            {buckets.map((b) => {
-              const inH = (b.contributed / chartMax) * 100;
-              const outH = ((b.withdrawn + b.loans) / chartMax) * 100;
-              return (
-                <View key={b.key} style={styles.barGroup}>
-                  <View style={styles.barStack}>
-                    <View
-                      style={[styles.barIn, { height: `${Math.max(inH, 3)}%` }]}
-                    />
-                    <View
-                      style={[styles.barOut, { height: `${Math.max(outH, 3)}%` }]}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.barLabel,
-                      b.isCurrent && styles.barLabelActive,
-                    ]}
-                  >
-                    {b.label}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
-
-          <View style={styles.chartLegend}>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: ACCENT.green }]}
-              />
-              <Text style={styles.legendText}>In</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: ACCENT.red }]}
-              />
-              <Text style={styles.legendText}>Out</Text>
-            </View>
-          </View>
-        </Clay>
-
-        {/* ── Financial health ───────────────────────────── */}
-        <Clay
-          style={[styles.block, { marginTop: SPACING.lg }]}
-          bodyStyle={styles.healthCard}
-        >
-          <View style={styles.healthRow}>
-            <View style={styles.healthRingWrap}>
-              <CircularProgress
-                percentage={health.total}
-                size={90}
-                strokeWidth={7}
-                color={health.tierColor}
-                backgroundColor={CLAY.sunken}
-              />
-            </View>
-            <View style={{ flex: 1, gap: 4 }}>
-              <View style={styles.healthTierRow}>
-                <ShieldCheck
-                  size={13}
-                  color={health.tierColor}
-                  strokeWidth={2.6}
-                />
-                <Text style={[styles.healthTier, { color: health.tierColor }]}>
-                  {health.tier}
-                </Text>
-              </View>
-              <Text style={styles.healthTitle}>Financial health</Text>
-              <Text style={styles.healthBody}>
-                Six signals: savings, debt, activity, breadth, engagement and
-                consistency.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.healthBars}>
-            <HealthBar
-              label="Savings"
-              value={health.savings}
-              max={25}
-              color={ACCENT.teal}
-              styles={styles}
-            />
-            <HealthBar
-              label="Debt"
-              value={health.debt}
-              max={20}
-              color={ACCENT.green}
-              styles={styles}
-            />
-            <HealthBar
-              label="Activity"
-              value={health.contribution}
-              max={20}
-              color={ACCENT.purple}
-              styles={styles}
-            />
-            <HealthBar
-              label="Breadth"
-              value={health.diversification}
-              max={15}
-              color={ACCENT.navy}
-              styles={styles}
-            />
-            <HealthBar
-              label="Engagement"
-              value={health.engagement}
-              max={10}
-              color={ACCENT.amber}
-              styles={styles}
-            />
-            <HealthBar
-              label="Consistency"
-              value={health.consistency}
-              max={10}
-              color={CLAY.inkSoft}
-              styles={styles}
-            />
-          </View>
-        </Clay>
-
-        {/* ── Key ratios ─────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Gauge size={14} color={theme.primary} strokeWidth={2.4} />
-            <Text style={styles.sectionTitle}>Key ratios</Text>
-          </View>
-        </View>
-
-        <View style={styles.ratioRow}>
-          <RatioCard
-            label="Savings rate"
-            value={`${Math.round(ratios.savingsRate)}%`}
-            helper="of inflow this range"
-            status={
-              ratios.savingsRate >= 20
-                ? "good"
-                : ratios.savingsRate >= 10
-                ? "fair"
-                : "low"
-            }
-            styles={styles}
-          />
-          <RatioCard
-            label="Debt load"
-            value={
-              ratios.totalBorrowed > 0
-                ? `${Math.round(ratios.debtLoad)}%`
-                : "0%"
-            }
-            helper={
-              ratios.totalBorrowed > 0
-                ? "of borrowed still owed"
-                : "no active loans"
-            }
-            status={
-              ratios.debtLoad === 0
-                ? "good"
-                : ratios.debtLoad <= 40
-                ? "good"
-                : ratios.debtLoad <= 70
-                ? "fair"
-                : "low"
-            }
-            styles={styles}
-          />
-          <RatioCard
-            label="Liquidity"
-            value={`${ratios.liquidityMonths.toFixed(1)}m`}
-            helper="of outflow cover"
-            status={
-              ratios.liquidityMonths >= 3
-                ? "good"
-                : ratios.liquidityMonths >= 1
-                ? "fair"
-                : "low"
-            }
-            styles={styles}
-          />
-        </View>
-
-        {/* ── Savings goals ──────────────────────────────── */}
-        {goals.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <PiggyBank size={14} color={ACCENT.teal} strokeWidth={2.4} />
-                <Text style={styles.sectionTitle}>Savings goals</Text>
-              </View>
-              <TouchableOpacity
-                onPress={goToGroups}
-                hitSlop={8}
-                style={styles.sectionLink}
-              >
-                <Text style={styles.sectionLinkText}>Details</Text>
-                <ChevronRight
-                  size={13}
-                  color={theme.primary}
-                  strokeWidth={2.8}
-                />
+          {/* 2. Balance Area */}
+          <View style={styles.balanceArea}>
+            <View style={styles.balanceHeaderRow}>
+              <Text style={styles.balanceLabel}>Wallet Balance</Text>
+              <TouchableOpacity onPress={() => setIsDataVisible(!isDataVisible)} style={{ padding: 4 }}>
+                {isDataVisible ? <Eye size={20} color={CLAY.inkSoft} /> : <EyeOff size={20} color={CLAY.inkSoft} />}
               </TouchableOpacity>
             </View>
-
-            <View style={styles.listWrap}>
-              {goals.map((g) => (
-                <GoalCard
-                  key={g.id}
-                  goal={g}
-                  currencyCode={currencyCode}
-                  styles={styles}
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        {/* ── Peer benchmarks ────────────────────────────── */}
-        {benchmarks.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Award size={14} color={ACCENT.amber} strokeWidth={2.4} />
-                <Text style={styles.sectionTitle}>How you compare</Text>
-              </View>
-            </View>
-
-            <View style={styles.listWrap}>
-              {benchmarks.map((b) => (
-                <BenchmarkRow
-                  key={b.id}
-                  bench={b}
-                  currencyCode={currencyCode}
-                  styles={styles}
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        {/* ── Insights ───────────────────────────────────── */}
-        {insights.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Insights for you</Text>
-            </View>
-
-            <View style={styles.listWrap}>
-              {insights.map((insight) => (
-                <InsightCard
-                  key={insight.id}
-                  insight={insight}
-                  styles={styles}
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        {/* ── Financial literacy ─────────────────────────── */}
-        {literacy.length > 0 ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <BookOpen size={14} color={ACCENT.navy} strokeWidth={2.4} />
-                <Text style={styles.sectionTitle}>
-                  Grow your financial skills
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.listWrap}>
-              {literacy.map((card) => (
-                <LiteracyCard key={card.id} card={card} styles={styles} />
-              ))}
-            </View>
-          </>
-        ) : null}
-
-        {/* ── Money movement ─────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionTitleRow}>
-            <Compass size={14} color={ACCENT.purple} strokeWidth={2.4} />
-            <Text style={styles.sectionTitle}>Where your money went</Text>
-          </View>
-        </View>
-
-        <Clay style={styles.block} bodyStyle={styles.categoryCard}>
-          <CategoryRow
-            icon={ArrowUpCircle}
-            label="Savings contributions"
-            value={ledger.savingsContributed}
-            total={Math.max(
-              ledger.savingsContributed +
-                ledger.savingsWithdrawn +
-                ledger.loansRepaid,
-              1
-            )}
-            color={ACCENT.green}
-            soft={ACCENT.greenSoft}
-            styles={styles}
-          />
-          <CategoryRow
-            icon={ArrowDownCircle}
-            label="Withdrawals"
-            value={ledger.savingsWithdrawn}
-            total={Math.max(
-              ledger.savingsContributed +
-                ledger.savingsWithdrawn +
-                ledger.loansRepaid,
-              1
-            )}
-            color={ACCENT.red}
-            soft={ACCENT.redSoft}
-            styles={styles}
-          />
-          <CategoryRow
-            icon={HandCoins}
-            label="Loan repayments"
-            value={ledger.loansRepaid}
-            total={Math.max(
-              ledger.savingsContributed +
-                ledger.savingsWithdrawn +
-                ledger.loansRepaid,
-              1
-            )}
-            color={ACCENT.purple}
-            soft={ACCENT.purpleSoft}
-            styles={styles}
-            last
-          />
-        </Clay>
-
-        {/* ── Needs attention ────────────────────────────── */}
-        {hasAttention ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Needs your attention</Text>
-            </View>
-
-            <View style={styles.listWrap}>
-              {pendingInvites.length > 0 ? (
-                <AttentionItem
-                  icon={Users}
-                  color={ACCENT.navy}
-                  soft={ACCENT.navySoft}
-                  title={`${pendingInvites.length} pending invite${
-                    pendingInvites.length === 1 ? "" : "s"
-                  }`}
-                  subtitle="Review and accept from Groups"
-                  onPress={goToGroups}
-                  styles={styles}
-                />
-              ) : null}
-              {pendingLoanApprovals > 0 ? (
-                <AttentionItem
-                  icon={HandCoins}
-                  color={ACCENT.purple}
-                  soft={ACCENT.purpleSoft}
-                  title={`${pendingLoanApprovals} loan approval${
-                    pendingLoanApprovals === 1 ? "" : "s"
-                  }`}
-                  subtitle="SACCO members are waiting for your vote"
-                  onPress={goToGroups}
-                  styles={styles}
-                />
-              ) : null}
-              {pendingWithdrawalApprovals > 0 ? (
-                <AttentionItem
-                  icon={ArrowDownCircle}
-                  color={ACCENT.red}
-                  soft={ACCENT.redSoft}
-                  title={`${pendingWithdrawalApprovals} withdrawal approval${
-                    pendingWithdrawalApprovals === 1 ? "" : "s"
-                  }`}
-                  subtitle="Savings plans awaiting your review"
-                  onPress={goToGroups}
-                  styles={styles}
-                />
-              ) : null}
-            </View>
-          </>
-        ) : null}
-
-        {/* ── Circles ────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>My circles</Text>
-          {circles.length > 0 ? (
-            <TouchableOpacity
-              onPress={goToGroups}
-              hitSlop={8}
-              style={styles.sectionLink}
-            >
-              <Text style={styles.sectionLinkText}>
-                {remainingCircles > 0
-                  ? `View all · +${remainingCircles}`
-                  : "View all"}
-              </Text>
-              <ChevronRight
-                size={13}
-                color={theme.primary}
-                strokeWidth={2.8}
-              />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {circles.length === 0 ? (
-          <Clay style={styles.block} bodyStyle={styles.emptyCard}>
-            <View style={[styles.emptyIcon, { backgroundColor: ACCENT.navySoft }]}>
-              <Users size={22} color={ACCENT.navy} strokeWidth={2} />
-            </View>
-            <Text style={styles.emptyTitle}>No circles yet</Text>
-            <Text style={styles.emptyBody}>
-              Join a community group or SACCO to see them here.
+            <Text style={styles.balanceAmount}>
+              {isDataVisible ? `KES ${formatMoney(walletBalance)}` : `KES ${"\u2022".repeat(6)}`}
             </Text>
-            <TouchableOpacity
-              onPress={() => router.push("/(tabs)/groups/create/picker")}
-              activeOpacity={0.9}
-              style={[styles.emptyCta, { backgroundColor: theme.primary }]}
+            
+            <View style={styles.balanceSubRow}>
+              <View style={styles.trustScorePill}>
+                <ShieldCheck size={20} color={ACCENT.green} />
+                <Text style={styles.trustScoreText}>TrustScore: 20</Text>
+              </View>
+              <TouchableOpacity onPress={goToWallet} style={styles.manageWalletBtn}>
+                <Text style={styles.manageWalletText}>Manage Wallet</Text>
+                <ChevronRight size={20} color={theme.primary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* 3. TrustLoop Square News Carousel */}
+          <View style={styles.newsSection}>
+            <ScrollView
+              ref={newsScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              snapToInterval={CARD_WIDTH + SPACING.md}
+              decelerationRate="fast"
+              contentContainerStyle={styles.newsScroll}
             >
-              <Plus size={15} color="#fff" strokeWidth={2.6} />
-              <Text style={styles.emptyCtaText}>Create one</Text>
-            </TouchableOpacity>
-          </Clay>
-        ) : (
-          <Clay style={styles.block} bodyStyle={styles.circlesList}>
-            {visibleCircles.map((c, i) => {
-              const isLast = i === visibleCircles.length - 1;
-              const isSacco = c.kind === "sacco";
-              return (
-                <TouchableOpacity
-                  key={`${c.kind}-${c.id}`}
-                  onPress={() => goToCircle(c)}
-                  activeOpacity={0.85}
-                  style={[styles.circleRow, !isLast && styles.circleDivider]}
-                >
-                  <GroupAvatar name={c.name} seed={c.id} size={40} />
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <View style={styles.circleNameRow}>
-                      <Text style={styles.circleName} numberOfLines={1}>
-                        {c.name}
-                      </Text>
-                      {isSacco && c.sasraCategory ? (
-                        <SaccoBadge
-                          category={c.sasraCategory}
-                          verified={c.sasraVerified}
-                          size="sm"
-                        />
-                      ) : null}
+              {TRUSTLOOP_NEWS.map((news) => {
+                const Icon = news.icon;
+                return (
+                  <View key={news.id} style={[styles.newsCard, { backgroundColor: news.bg, width: CARD_WIDTH }]}>
+                    <View style={[styles.newsIconWrap, { backgroundColor: "#fff" }]}>
+                      <Icon size={20} color={news.color} />
                     </View>
-                    <Text style={styles.circleMeta}>
-                      {c.memberCount} member{c.memberCount !== 1 ? "s" : ""}
+                    <Text style={[styles.newsTitle, { color: news.color }]}>{news.title}</Text>
+                    <Text style={styles.newsDesc} numberOfLines={3}>{news.desc}</Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <View style={styles.paginationDots}>
+              {TRUSTLOOP_NEWS.map((_, i) => (
+                <View key={i} style={[styles.dot, newsIndex === i && styles.dotActive]} />
+              ))}
+            </View>
+          </View>
+
+          {/* 4. My Groups */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Groups</Text>
+            <TouchableOpacity onPress={goToGroups}><Text style={styles.linkText}>View All</Text></TouchableOpacity>
+          </View>
+          
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupsScroll}>
+            {circles.length === 0 ? (
+              <View style={styles.emptyStateCard}><Text style={styles.emptyText}>No groups joined yet.</Text></View>
+            ) : (
+              circles.map((c) => (
+                <TouchableOpacity key={c.id} style={styles.groupCard} onPress={() => goToGroups()}>
+                  <GroupAvatar name={c.name} seed={c.id} size={50} />
+                  <Text style={styles.groupName} numberOfLines={1}>{c.name}</Text>
+                  <Text style={styles.groupMeta}>{c.kind === "sacco" ? "SACCO" : "Community"}</Text>
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+
+          {/* 5. Action Center */}
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Action Center</Text></View>
+          <View style={styles.actionCenterWrapper}>
+            {actionCenterGroups.length === 0 ? (
+              <View style={styles.emptyStateCard}><Text style={styles.emptyText}>Uko sawa! No pending actions.</Text></View>
+            ) : (
+              actionCenterGroups.map((group) => {
+                const isExpanded = expandedGroupId === group.id;
+                return (
+                  <View key={group.id} style={styles.accordionContainer}>
+                    <TouchableOpacity style={styles.accordionHeader} onPress={() => toggleAccordion(group.id)} activeOpacity={0.7}>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <Text style={styles.accordionTitle}>{group.name}</Text>
+                        <View style={styles.actionBadge}><Text style={styles.actionBadgeText}>{group.actions.length}</Text></View>
+                      </View>
+                      {isExpanded ? <ChevronUp size={20} color={CLAY.inkSoft} /> : <ChevronDown size={20} color={CLAY.inkSoft} />}
+                    </TouchableOpacity>
+                    {isExpanded && (
+                      <View style={styles.accordionBody}>
+                        {group.actions.map((action: any) => (
+                          <TouchableOpacity key={action.id} style={styles.actionItem}>
+                            <Text style={styles.actionItemText}>{action.title}</Text>
+                            <ChevronRight size={14} color={CLAY.inkFaint} />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })
+            )}
+          </View>
+
+          {/* 6. Recent Activity */}
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Recent Transactions</Text></View>
+          <View style={styles.txCard}>
+            <View style={styles.txFilters}>
+              {(["all", "in", "out"] as const).map(f => (
+                <TouchableOpacity key={f} onPress={() => handleFilterPress(f)} style={[styles.txFilterPill, txFilter === f && styles.txFilterPillActive]}>
+                  <Text style={[styles.txFilterText, txFilter === f && styles.txFilterTextActive]}>{f.toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {displayedTransactions.length === 0 ? (
+              <View style={styles.emptyState}><Text style={styles.emptyText}>No recent transactions</Text></View>
+            ) : (
+              displayedTransactions.map((tx: any, index: number) => (
+                <View key={tx.id} style={[styles.txRow, index !== displayedTransactions.length - 1 && styles.txDivider]}>
+                  <View style={[styles.txIconWrap, { backgroundColor: tx.type === "in" ? ACCENT.greenSoft : ACCENT.redSoft }]}>
+                    {tx.type === "in" ? <ArrowDownLeft size={16} color={ACCENT.green} /> : <ArrowUpRight size={16} color={ACCENT.red} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.txTitle}>{tx.title}</Text>
+                    <Text style={styles.txDate}>
+                      {formatDate(tx.created_at, "medium_date")} • {tx.group}
                     </Text>
                   </View>
-                  <ChevronRight
-                    size={14}
-                    color={CLAY.inkFaint}
-                    strokeWidth={2.4}
-                  />
-                </TouchableOpacity>
-              );
-            })}
-          </Clay>
-        )}
+                  <Text style={[styles.txAmount, { color: tx.type === "in" ? ACCENT.green : CLAY.ink }]}>
+                    {isDataVisible ? `${tx.type === "in" ? "+" : "-"} KES ${formatMoney(tx.amount)}` : `KES ••••`}
+                  </Text>
+                </View>
+              ))
+            )}
 
-        <View style={{ height: 24 }} />
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+            {txFilter === "all" && (
+              <TouchableOpacity style={styles.expandTxBtn} onPress={() => setIsTxExpanded(prev => !prev)}>
+                <Text style={styles.expandTxText}>{isTxExpanded ? "View Less" : "View 5 More"}</Text>
+              </TouchableOpacity>
+            )}
 
-/* ------------------------------------------------------------------ */
-/*  Sub-components                                                    */
-/* ------------------------------------------------------------------ */
+            <View style={styles.statementActions}>
+              <TouchableOpacity style={styles.statementBtn} onPress={() => setIsMiniModalOpen(true)}>
+                <Mail size={20} color={CLAY.ink} />
+                <Text style={styles.statementBtnText}>Mini Statement</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.statementBtn} onPress={() => setIsFullModalOpen(true)}>
+                <FileText size={20} color={CLAY.ink} />
+                <Text style={styles.statementBtnText}>Full Statement</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
 
-function Breakdown({
-  label,
-  value,
-  styles,
-}: {
-  label: string;
-  value: string;
-  styles: any;
-}) {
-  return (
-    <View style={styles.breakdownItem}>
-      <Text style={styles.breakdownLabel}>{label}</Text>
-      <Text style={styles.breakdownValue} numberOfLines={1}>
-        {value}
-      </Text>
+      <MiniStatementModal 
+        visible={isMiniModalOpen} 
+        onClose={() => setIsMiniModalOpen(false)} 
+        userEmail={userEmail} 
+      />
+      <FullStatementModal 
+        visible={isFullModalOpen} 
+        onClose={() => setIsFullModalOpen(false)} 
+        userEmail={userEmail} 
+      />
     </View>
   );
 }
 
-function HealthBar({
-  label,
-  value,
-  max,
-  color,
-  styles,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  color: string;
-  styles: any;
-}) {
-  const pct = Math.min((value / max) * 100, 100);
-  return (
-    <View style={styles.healthBarItem}>
-      <View style={styles.healthBarHeader}>
-        <Text style={styles.healthBarLabel}>{label}</Text>
-        <Text style={styles.healthBarValue}>
-          {value}/{max}
-        </Text>
-      </View>
-      <View style={styles.healthBarTrack}>
-        <View
-          style={[
-            styles.healthBarFill,
-            { width: `${pct}%`, backgroundColor: color },
-          ]}
-        />
-      </View>
-    </View>
-  );
-}
+/* ================================================================== */
+/*  STYLESHEET                                                        */
+/* ================================================================== */
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: CLAY.canvas },
+  scroll: { flex: 1 },
+  
+  // Header
+  header: { flexDirection: "row", alignItems: "flex-start", paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, paddingBottom: SPACING.xl },
+  greeting: { fontSize: 14, fontWeight: "500", color: CLAY.inkSoft },
+  name: { fontSize: 24, fontWeight: "800", color: CLAY.ink, letterSpacing: -0.5, marginTop: 2 },
+  bellWrap: { position: "relative", padding: 8 },
+  bellBadge: { position: "absolute", top: 8, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: ACCENT.red, borderWidth: 2, borderColor: "#E8F5E9" },
 
-function RatioCard({
-  label,
-  value,
-  helper,
-  status,
-  styles,
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  status: "good" | "fair" | "low";
-  styles: any;
-}) {
-  const color =
-    status === "good"
-      ? ACCENT.green
-      : status === "fair"
-      ? ACCENT.amber
-      : ACCENT.red;
+  // Balance
+  balanceArea: { paddingHorizontal: SPACING.xl, marginTop: SPACING.xl },
+  balanceHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  balanceLabel: { fontSize: 14, fontWeight: "600", color: CLAY.inkSoft },
+  balanceAmount: { fontSize: 42, fontWeight: "800", color: CLAY.ink, letterSpacing: -1.5, marginTop: 4, fontVariant: ["tabular-nums"] },
+  balanceSubRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: SPACING.lg },
+  trustScorePill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: ACCENT.greenSoft, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  trustScoreText: { fontSize: 11, fontWeight: "700", color: ACCENT.green },
+  manageWalletBtn: { flexDirection: "row", alignItems: "center", gap: 4 },
+  manageWalletText: { fontSize: 13, fontWeight: "700", color: CLAY.ink },
 
-  return (
-    <Clay radius={RADIUS.lg} depth={0} style={styles.ratioShell} bodyStyle={styles.ratioCard}>
-      <Text style={styles.ratioLabel}>{label}</Text>
-      <Text style={[styles.ratioValue, { color }]}>{value}</Text>
-      <Text style={styles.ratioHelper}>{helper}</Text>
-    </Clay>
-  );
-}
+  // News Carousel
+  newsSection: { marginTop: SPACING.xxl },
+  newsScroll: { paddingHorizontal: SPACING.xl, gap: SPACING.md },
+  newsCard: { height: CARD_HEIGHT, borderRadius: RADIUS.lg, padding: SPACING.lg, justifyContent: "space-between" },
+  newsIconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", marginBottom: SPACING.sm },
+  newsTitle: { fontSize: 15, fontWeight: "800", marginBottom: 4 },
+  newsDesc: { fontSize: 12, color: CLAY.inkSoft, lineHeight: 16, fontWeight: "500" },
+  paginationDots: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, marginTop: SPACING.md },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: CLAY.sunken },
+  dotActive: { width: 18, height: 6, borderRadius: 3, backgroundColor: CLAY.inkSoft },
 
-function GoalCard({
-  goal,
-  currencyCode,
-  styles,
-}: {
-  goal: GoalProjection;
-  currencyCode: string;
-  styles: any;
-}) {
-  const color =
-    goal.status === "done"
-      ? ACCENT.green
-      : goal.status === "slow"
-      ? ACCENT.amber
-      : ACCENT.teal;
+  // Section Headers & Empty States
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: SPACING.xl, marginTop: SPACING.xxl, marginBottom: SPACING.md },
+  sectionTitle: { fontSize: 17, fontWeight: "800", color: CLAY.ink, letterSpacing: -0.3 },
+  linkText: { fontSize: 13, fontWeight: "600", color: CLAY.inkSoft },
+  emptyState: { padding: SPACING.xl, alignItems: "center", justifyContent: "center" },
+  emptyStateCard: { padding: SPACING.xl, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", borderRadius: RADIUS.lg, width: "100%" },
+  emptyText: { fontSize: 13, color: CLAY.inkSoft, fontStyle: "italic" },
 
-  return (
-    <Clay bodyStyle={styles.goalCard}>
-      <View style={styles.goalHeader}>
-        <Text style={styles.goalName} numberOfLines={1}>
-          {goal.name}
-        </Text>
-        <Text style={[styles.goalPct, { color }]}>{goal.pct}%</Text>
-      </View>
+  // Groups
+  groupsScroll: { paddingHorizontal: SPACING.xl, gap: SPACING.md, paddingBottom: SPACING.md },
+  groupCard: { width: 130, backgroundColor: CLAY.surface, borderRadius: RADIUS.lg, padding: SPACING.lg, alignItems: "center", gap: SPACING.sm, shadowColor: CLAY.shade, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 3 },
+  groupName: { fontSize: 13, fontWeight: "700", color: CLAY.ink, textAlign: "center", marginTop: 4 },
+  groupMeta: { fontSize: 10, color: CLAY.inkSoft, textAlign: "center", marginTop: 2 },
 
-      <View style={styles.goalTrack}>
-        <View
-          style={[
-            styles.goalFill,
-            { width: `${goal.pct}%`, backgroundColor: color },
-          ]}
-        />
-      </View>
+  // Action Center
+  actionCenterWrapper: { marginHorizontal: SPACING.xl, backgroundColor: "#fff", borderRadius: RADIUS.lg, overflow: "hidden", shadowColor: CLAY.shade, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 3 },
+  accordionContainer: { borderBottomWidth: 1, borderBottomColor: CLAY.hairline },
+  accordionHeader: { flexDirection: "row", alignItems: "center", padding: SPACING.lg },
+  accordionTitle: { fontSize: 15, fontWeight: "700", color: CLAY.ink },
+  actionBadge: { backgroundColor: ACCENT.red, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2 },
+  actionBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  accordionBody: { backgroundColor: CLAY.canvas, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm },
+  actionItem: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: CLAY.hairline },
+  actionItemText: { fontSize: 14, color: CLAY.ink, fontWeight: "500" },
 
-      <View style={styles.goalFooter}>
-        <Text style={styles.goalFooterText}>
-          {currencyCode} {formatMoney(goal.contributed)} of {currencyCode}{" "}
-          {formatMoney(goal.target)}
-        </Text>
-        {goal.etaLabel ? (
-          <Text style={styles.goalFooterText}>ETA {goal.etaLabel}</Text>
-        ) : goal.status === "slow" ? (
-          <Text style={[styles.goalFooterText, { color: ACCENT.amber }]}>
-            No recent contributions
-          </Text>
-        ) : null}
-      </View>
-    </Clay>
-  );
-}
+  // Transactions
+  txCard: { marginHorizontal: SPACING.xl, backgroundColor: "#fff", borderRadius: RADIUS.lg, padding: SPACING.lg, shadowColor: CLAY.shade, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, elevation: 3 },
+  txFilters: { flexDirection: "row", gap: SPACING.sm, marginBottom: SPACING.md },
+  txFilterPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: CLAY.sunken },
+  txFilterPillActive: { backgroundColor: CLAY.ink },
+  txFilterText: { fontSize: 11, fontWeight: "700", color: CLAY.inkSoft },
+  txFilterTextActive: { color: "#fff" },
+  txRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md, paddingVertical: SPACING.md },
+  txDivider: { borderBottomWidth: 1, borderBottomColor: CLAY.hairline },
+  txIconWrap: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  txTitle: { fontSize: 14, fontWeight: "700", color: CLAY.ink },
+  txDate: { fontSize: 12, color: CLAY.inkSoft, marginTop: 2 },
+  txAmount: { fontSize: 14, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  expandTxBtn: { paddingVertical: SPACING.md, alignItems: "center" },
+  expandTxText: { fontSize: 13, fontWeight: "700", color: CLAY.inkSoft },
+  statementActions: { flexDirection: "row", gap: SPACING.md, marginTop: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: CLAY.hairline },
+  statementBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 12, backgroundColor: CLAY.canvas, borderRadius: RADIUS.md },
+  statementBtnText: { fontSize: 12, fontWeight: "700", color: CLAY.ink },
 
-function BenchmarkRow({
-  bench,
-  currencyCode,
-  styles,
-}: {
-  bench: Benchmark;
-  currencyCode: string;
-  styles: any;
-}) {
-  const better = bench.ratio >= 1;
-  const pct = bench.avgValue > 0 ? Math.min(bench.ratio, 2) : 0;
-  const color = better ? ACCENT.green : ACCENT.amber;
-  const label = bench.unit === "shares" ? "share capital" : "contributed";
-
-  return (
-    <Clay bodyStyle={styles.benchCard}>
-      <View style={styles.benchHeader}>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.benchName} numberOfLines={1}>
-            {bench.circleName}
-          </Text>
-          <Text style={styles.benchMeta}>
-            Your {label} versus the circle average
-          </Text>
-        </View>
-        <View
-          style={[
-            styles.benchBadge,
-            { backgroundColor: better ? ACCENT.greenSoft : ACCENT.amberSoft },
-          ]}
-        >
-          <Text style={[styles.benchBadgeText, { color }]}>
-            {better ? "Above avg" : "Below avg"}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.benchBarWrap}>
-        <View style={styles.benchBarTrack}>
-          <View
-            style={[
-              styles.benchBarFill,
-              {
-                width: `${Math.min(pct * 50, 100)}%`,
-                backgroundColor: color,
-              },
-            ]}
-          />
-          <View style={[styles.benchMarker, { left: "50%" }]} />
-        </View>
-      </View>
-
-      <View style={styles.benchFooter}>
-        <Text style={styles.benchFooterText}>
-          You: {currencyCode} {formatCompactMoney(bench.myValue)}
-        </Text>
-        <Text style={styles.benchFooterText}>
-          Avg: {currencyCode} {formatCompactMoney(bench.avgValue)}
-        </Text>
-      </View>
-    </Clay>
-  );
-}
-
-function InsightCard({
-  insight,
-  styles,
-}: {
-  insight: Insight;
-  styles: any;
-}) {
-  const accent =
-    insight.tone === "positive"
-      ? ACCENT.green
-      : insight.tone === "warning"
-      ? ACCENT.amber
-      : ACCENT.navy;
-
-  const label =
-    insight.tone === "positive"
-      ? "Positive"
-      : insight.tone === "warning"
-      ? "Attention"
-      : "Note";
-
-  return (
-    <Clay bodyStyle={styles.insightCard}>
-      <View style={[styles.insightRule, { backgroundColor: accent }]} />
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={[styles.insightLabel, { color: accent }]}>
-          {label.toUpperCase()}
-        </Text>
-        <Text style={styles.insightTitle}>{insight.title}</Text>
-        <Text style={styles.insightBody}>{insight.body}</Text>
-      </View>
-    </Clay>
-  );
-}
-
-function LiteracyCard({
-  card,
-  styles,
-}: {
-  card: LiteracyCard;
-  styles: any;
-}) {
-  return (
-    <Clay bodyStyle={styles.literacyCard}>
-      <View style={[styles.literacyRule, { backgroundColor: ACCENT.navy }]} />
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={[styles.literacyLabel, { color: ACCENT.navy }]}>
-          LESSON
-        </Text>
-        <Text style={styles.literacyTitle}>{card.title}</Text>
-        <Text style={styles.literacyBody}>{card.body}</Text>
-      </View>
-    </Clay>
-  );
-}
-
-function CategoryRow({
-  icon: Icon,
-  label,
-  value,
-  total,
-  color,
-  soft,
-  styles,
-  last,
-}: {
-  icon: ComponentType<{
-    size?: number;
-    color?: string;
-    strokeWidth?: number;
-  }>;
-  label: string;
-  value: number;
-  total: number;
-  color: string;
-  soft: string;
-  styles: any;
-  last?: boolean;
-}) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-
-  return (
-    <View style={[styles.categoryRow, !last && styles.categoryDivider]}>
-      <View style={[styles.categoryIcon, { backgroundColor: soft }]}>
-        <Icon size={14} color={color} strokeWidth={2.4} />
-      </View>
-      <View style={{ flex: 1, gap: 5 }}>
-        <View style={styles.categoryHeader}>
-          <Text style={styles.categoryLabel}>{label}</Text>
-          <Text style={styles.categoryPct}>{pct}%</Text>
-        </View>
-        <View style={styles.categoryTrack}>
-          <View
-            style={[
-              styles.categoryFill,
-              { width: `${pct}%`, backgroundColor: color },
-            ]}
-          />
-        </View>
-      </View>
-      <Text style={styles.categoryValue}>{formatCompactMoney(value)}</Text>
-    </View>
-  );
-}
-
-function AttentionItem({
-  icon: Icon,
-  color,
-  soft,
-  title,
-  subtitle,
-  onPress,
-  styles,
-}: {
-  icon: ComponentType<{
-    size?: number;
-    color?: string;
-    strokeWidth?: number;
-  }>;
-  color: string;
-  soft: string;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-  styles: any;
-}) {
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-      <Clay bodyStyle={styles.attentionRow}>
-        <View style={[styles.attentionIcon, { backgroundColor: soft }]}>
-          <Icon size={15} color={color} strokeWidth={2.4} />
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.attentionTitle} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={styles.attentionMeta} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        </View>
-        <ChevronRight size={14} color={color} strokeWidth={2.6} />
-      </Clay>
-    </TouchableOpacity>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Styles                                                            */
-/* ------------------------------------------------------------------ */
-
-function makeStyles(theme: any) {
-  return StyleSheet.create({
-    root: { flex: 1, backgroundColor: CLAY.canvas },
-    scroll: { flex: 1 },
-    scrollContent: { paddingBottom: SPACING.xxl },
-
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      paddingHorizontal: SPACING.xl,
-      paddingTop: SPACING.lg,
-      paddingBottom: SPACING.md,
-    },
-    greeting: {
-      fontSize: 12.5,
-      fontWeight: "600",
-      color: CLAY.inkSoft,
-      letterSpacing: 0.3,
-    },
-    name: {
-      fontSize: 26,
-      fontWeight: "800",
-      color: CLAY.ink,
-      letterSpacing: -0.8,
-    },
-    bellWrap: { position: "relative" },
-    bellShell: { borderRadius: 16 },
-    bellBody: {
-      width: 44,
-      height: 44,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    bellBadge: {
-      position: "absolute",
-      top: -3,
-      right: -3,
-      minWidth: 18,
-      height: 18,
-      borderRadius: 9,
-      paddingHorizontal: 4,
-      backgroundColor: ACCENT.red,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 2,
-      borderColor: CLAY.canvas,
-    },
-    bellBadgeText: {
-      color: "#fff",
-      fontSize: 9.5,
-      fontWeight: "800",
-      lineHeight: 12,
-    },
-
-    heroShell: {
-      marginHorizontal: SPACING.xl,
-      marginTop: SPACING.sm,
-    },
-    hero: {
-      padding: SPACING.lg + 2,
-      gap: SPACING.sm,
-      overflow: "hidden",
-    },
-    heroGlowA: {
-      position: "absolute",
-      top: -70,
-      right: -50,
-      width: 190,
-      height: 190,
-      borderRadius: 95,
-      backgroundColor: "rgba(255,255,255,0.10)",
-    },
-    heroGlowB: {
-      position: "absolute",
-      bottom: -60,
-      left: -40,
-      width: 140,
-      height: 140,
-      borderRadius: 70,
-      backgroundColor: "rgba(255,255,255,0.06)",
-    },
-    heroTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    heroEyebrowRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-    heroEyebrow: {
-      fontSize: 10,
-      fontWeight: "800",
-      letterSpacing: 1.2,
-      color: "#fff",
-      opacity: 0.85,
-    },
-    heroLink: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 3,
-      paddingVertical: 3,
-    },
-    heroLinkText: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: "#fff",
-      opacity: 0.9,
-    },
-    heroAmount: {
-      fontSize: 34,
-      fontWeight: "800",
-      letterSpacing: -1.2,
-      color: "#fff",
-      fontVariant: ["tabular-nums"],
-      marginTop: 4,
-    },
-    heroChangeRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-    heroChangeText: {
-      fontSize: 11.5,
-      color: "#fff",
-      opacity: 0.85,
-      fontWeight: "600",
-    },
-    heroBreakdown: {
-      flexDirection: "row",
-      gap: SPACING.md,
-      marginTop: SPACING.md,
-      paddingTop: SPACING.md,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: "rgba(255,255,255,0.22)",
-    },
-    breakdownItem: { flex: 1, gap: 3 },
-    breakdownLabel: {
-      fontSize: 9.5,
-      fontWeight: "800",
-      letterSpacing: 0.8,
-      color: "#fff",
-      opacity: 0.65,
-      textTransform: "uppercase",
-    },
-    breakdownValue: {
-      fontSize: 13,
-      fontWeight: "800",
-      color: "#fff",
-      fontVariant: ["tabular-nums"],
-      letterSpacing: -0.3,
-    },
-
-    segmentWrap: {
-      flexDirection: "row",
-      marginHorizontal: SPACING.xl,
-      marginTop: SPACING.xl,
-      padding: 5,
-      borderRadius: RADIUS.md,
-      backgroundColor: CLAY.sunken,
-    },
-    segmentBtn: {
-      flex: 1,
-      paddingVertical: 10,
-      borderRadius: RADIUS.sm,
-      alignItems: "center",
-    },
-    segmentBtnActive: {
-      backgroundColor: CLAY.surfaceRaised,
-      shadowColor: CLAY.shade,
-      shadowOffset: { width: 3, height: 3 },
-      shadowOpacity: 1,
-      shadowRadius: 7,
-      elevation: 3,
-    },
-    segmentText: {
-      fontSize: 12,
-      fontWeight: "700",
-      color: CLAY.inkSoft,
-    },
-    segmentTextActive: { color: theme.primary },
-
-    block: { marginHorizontal: SPACING.xl, marginTop: SPACING.lg },
-    listWrap: { paddingHorizontal: SPACING.xl, gap: SPACING.md },
-    cardBody: { padding: SPACING.lg, gap: SPACING.md },
-
-    chartHeader: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-    },
-    chartTitle: {
-      fontSize: 15,
-      fontWeight: "800",
-      color: CLAY.ink,
-      letterSpacing: -0.2,
-    },
-    chartSubtitle: {
-      fontSize: 11.5,
-      color: CLAY.inkSoft,
-      fontWeight: "500",
-    },
-    chartNetWrap: { alignItems: "flex-end", gap: 2 },
-    chartNetLabel: {
-      fontSize: 9.5,
-      fontWeight: "800",
-      letterSpacing: 0.8,
-      color: CLAY.inkFaint,
-      textTransform: "uppercase",
-    },
-    chartNetValue: {
-      fontSize: 16,
-      fontWeight: "800",
-      fontVariant: ["tabular-nums"],
-      letterSpacing: -0.3,
-    },
-    barsRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "flex-end",
-      height: 120,
-      gap: 6,
-    },
-    barGroup: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "flex-end",
-      height: "100%",
-      gap: 6,
-    },
-    barStack: {
-      flex: 1,
-      width: "100%",
-      flexDirection: "row",
-      gap: 3,
-      alignItems: "flex-end",
-      justifyContent: "center",
-    },
-    barIn: {
-      flex: 1,
-      backgroundColor: ACCENT.green,
-      borderRadius: 6,
-      opacity: 0.92,
-      minHeight: 3,
-    },
-    barOut: {
-      flex: 1,
-      backgroundColor: ACCENT.red,
-      borderRadius: 6,
-      opacity: 0.92,
-      minHeight: 3,
-    },
-    barLabel: {
-      fontSize: 10,
-      fontWeight: "600",
-      color: CLAY.inkFaint,
-      fontVariant: ["tabular-nums"],
-    },
-    barLabelActive: { color: CLAY.ink, fontWeight: "800" },
-    chartLegend: {
-      flexDirection: "row",
-      gap: SPACING.md,
-      paddingTop: SPACING.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: CLAY.hairline,
-    },
-    legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-    legendDot: { width: 8, height: 8, borderRadius: 4 },
-    legendText: {
-      fontSize: 11,
-      color: CLAY.inkSoft,
-      fontWeight: "600",
-    },
-
-    healthCard: { padding: SPACING.lg, gap: SPACING.md },
-    healthRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
-    healthRingWrap: {
-      width: 90,
-      height: 90,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    healthTierRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-    healthTier: {
-      fontSize: 11,
-      fontWeight: "800",
-      letterSpacing: 0.8,
-      textTransform: "uppercase",
-    },
-    healthTitle: {
-      fontSize: 16,
-      fontWeight: "800",
-      color: CLAY.ink,
-      letterSpacing: -0.3,
-    },
-    healthBody: {
-      fontSize: 11.5,
-      color: CLAY.inkSoft,
-      lineHeight: 16,
-      fontWeight: "500",
-    },
-    healthBars: {
-      gap: SPACING.sm,
-      paddingTop: SPACING.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: CLAY.hairline,
-    },
-    healthBarItem: { gap: 4 },
-    healthBarHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    healthBarLabel: {
-      fontSize: 11,
-      fontWeight: "700",
-      color: CLAY.inkSoft,
-      letterSpacing: 0.3,
-    },
-    healthBarValue: {
-      fontSize: 11,
-      fontWeight: "800",
-      color: CLAY.ink,
-      fontVariant: ["tabular-nums"],
-    },
-    healthBarTrack: {
-      height: 6,
-      borderRadius: 3,
-      backgroundColor: CLAY.sunken,
-      overflow: "hidden",
-    },
-    healthBarFill: { height: "100%", borderRadius: 3 },
-
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: SPACING.xl,
-      marginTop: SPACING.xxl,
-      marginBottom: SPACING.md,
-    },
-    sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    sectionTitle: {
-      fontSize: TYPE.h3,
-      fontWeight: "800",
-      color: CLAY.ink,
-      letterSpacing: -0.3,
-    },
-    sectionLink: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 3,
-      paddingVertical: 4,
-      paddingHorizontal: 6,
-    },
-    sectionLinkText: {
-      fontSize: 12,
-      fontWeight: "800",
-      color: theme.primary,
-      letterSpacing: 0.2,
-    },
-
-    ratioRow: {
-      flexDirection: "row",
-      gap: SPACING.md,
-      paddingHorizontal: SPACING.xl,
-    },
-    ratioShell: { flex: 1, borderRadius: RADIUS.lg },
-    ratioCard: {
-      paddingVertical: SPACING.md + 2,
-      paddingHorizontal: SPACING.sm,
-      borderRadius: RADIUS.lg,
-      alignItems: "center",
-      gap: 3,
-    },
-    ratioLabel: {
-      fontSize: 10,
-      fontWeight: "800",
-      color: CLAY.inkFaint,
-      letterSpacing: 0.6,
-      textTransform: "uppercase",
-      textAlign: "center",
-    },
-    ratioValue: {
-      fontSize: 18,
-      fontWeight: "800",
-      letterSpacing: -0.5,
-      fontVariant: ["tabular-nums"],
-    },
-    ratioHelper: {
-      fontSize: 10,
-      color: CLAY.inkSoft,
-      textAlign: "center",
-      fontWeight: "500",
-      lineHeight: 13,
-    },
-
-    goalCard: {
-      padding: SPACING.lg,
-      borderRadius: RADIUS.lg,
-      gap: SPACING.sm,
-    },
-    goalHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: SPACING.sm,
-    },
-    goalName: {
-      flex: 1,
-      fontSize: 14,
-      fontWeight: "700",
-      color: CLAY.ink,
-      letterSpacing: -0.2,
-    },
-    goalPct: {
-      fontSize: 16,
-      fontWeight: "800",
-      fontVariant: ["tabular-nums"],
-    },
-    goalTrack: {
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: CLAY.sunken,
-      overflow: "hidden",
-    },
-    goalFill: { height: "100%", borderRadius: 4 },
-    goalFooter: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    goalFooterText: {
-      fontSize: 11,
-      color: CLAY.inkSoft,
-      fontWeight: "600",
-      fontVariant: ["tabular-nums"],
-    },
-
-    benchCard: {
-      padding: SPACING.lg,
-      borderRadius: RADIUS.lg,
-      gap: SPACING.md,
-    },
-    benchHeader: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
-    benchName: {
-      fontSize: 13.5,
-      fontWeight: "700",
-      color: CLAY.ink,
-      letterSpacing: -0.1,
-    },
-    benchMeta: {
-      fontSize: 11,
-      color: CLAY.inkSoft,
-      fontWeight: "500",
-    },
-    benchBadge: {
-      paddingHorizontal: 9,
-      paddingVertical: 4,
-      borderRadius: 9,
-    },
-    benchBadgeText: {
-      fontSize: 9.5,
-      fontWeight: "800",
-      letterSpacing: 0.4,
-      textTransform: "uppercase",
-    },
-    benchBarWrap: { paddingVertical: 4 },
-    benchBarTrack: {
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: CLAY.sunken,
-      overflow: "hidden",
-      position: "relative",
-    },
-    benchBarFill: { height: "100%", borderRadius: 4 },
-    benchMarker: {
-      position: "absolute",
-      top: -2,
-      width: 2,
-      height: 11,
-      backgroundColor: CLAY.inkFaint,
-      opacity: 0.7,
-      borderRadius: 1,
-    },
-    benchFooter: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    benchFooterText: {
-      fontSize: 11,
-      color: CLAY.inkSoft,
-      fontWeight: "600",
-      fontVariant: ["tabular-nums"],
-    },
-
-    insightCard: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: SPACING.md,
-      padding: SPACING.lg,
-      borderRadius: RADIUS.lg,
-    },
-    insightRule: {
-      width: 3,
-      alignSelf: "stretch",
-      borderRadius: 2,
-    },
-    insightLabel: {
-      fontSize: 9.5,
-      fontWeight: "800",
-      letterSpacing: 1,
-    },
-    insightTitle: {
-      fontSize: 13.5,
-      fontWeight: "700",
-      color: CLAY.ink,
-      letterSpacing: -0.1,
-    },
-    insightBody: {
-      fontSize: 12,
-      color: CLAY.inkSoft,
-      lineHeight: 17,
-      fontWeight: "500",
-    },
-
-    literacyCard: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      gap: SPACING.md,
-      padding: SPACING.lg,
-      borderRadius: RADIUS.lg,
-    },
-    literacyRule: {
-      width: 3,
-      alignSelf: "stretch",
-      borderRadius: 2,
-      opacity: 0.85,
-    },
-    literacyLabel: {
-      fontSize: 9.5,
-      fontWeight: "800",
-      letterSpacing: 1,
-    },
-    literacyTitle: {
-      fontSize: 13.5,
-      fontWeight: "700",
-      color: CLAY.ink,
-      letterSpacing: -0.1,
-    },
-    literacyBody: {
-      fontSize: 12,
-      color: CLAY.inkSoft,
-      lineHeight: 17,
-      fontWeight: "500",
-    },
-
-    categoryCard: {
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.lg,
-    },
-    categoryRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      paddingVertical: SPACING.md,
-    },
-    categoryDivider: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: CLAY.hairline,
-    },
-    categoryIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 11,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    categoryHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    categoryLabel: {
-      fontSize: 12.5,
-      fontWeight: "700",
-      color: CLAY.ink,
-    },
-    categoryPct: {
-      fontSize: 11,
-      fontWeight: "800",
-      color: CLAY.inkSoft,
-      fontVariant: ["tabular-nums"],
-    },
-    categoryTrack: {
-      height: 5,
-      borderRadius: 3,
-      backgroundColor: CLAY.sunken,
-      overflow: "hidden",
-    },
-    categoryFill: { height: "100%", borderRadius: 3 },
-    categoryValue: {
-      fontSize: 12.5,
-      fontWeight: "800",
-      color: CLAY.ink,
-      fontVariant: ["tabular-nums"],
-      letterSpacing: -0.2,
-      minWidth: 58,
-      textAlign: "right",
-    },
-
-    attentionRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      padding: SPACING.lg,
-      borderRadius: RADIUS.lg,
-    },
-    attentionIcon: {
-      width: 34,
-      height: 34,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    attentionTitle: {
-      fontSize: 13.5,
-      fontWeight: "700",
-      color: CLAY.ink,
-      letterSpacing: -0.1,
-    },
-    attentionMeta: {
-      fontSize: 11,
-      color: CLAY.inkSoft,
-      fontWeight: "500",
-    },
-
-    circlesList: {
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.lg,
-    },
-    circleRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      paddingVertical: SPACING.md,
-    },
-    circleDivider: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: CLAY.hairline,
-    },
-    circleNameRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      flexWrap: "wrap",
-    },
-    circleName: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: CLAY.ink,
-      letterSpacing: -0.2,
-      flexShrink: 1,
-    },
-    circleMeta: {
-      fontSize: 11.5,
-      color: CLAY.inkSoft,
-      fontWeight: "500",
-    },
-
-    emptyCard: {
-      padding: SPACING.xl,
-      borderRadius: RADIUS.lg,
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    emptyIcon: {
-      width: 56,
-      height: 56,
-      borderRadius: 20,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: SPACING.sm,
-    },
-    emptyTitle: {
-      fontSize: 15,
-      fontWeight: "800",
-      color: CLAY.ink,
-      letterSpacing: -0.2,
-    },
-    emptyBody: {
-      fontSize: 12.5,
-      color: CLAY.inkSoft,
-      textAlign: "center",
-      lineHeight: 18,
-      paddingHorizontal: SPACING.md,
-    },
-    emptyCta: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      marginTop: SPACING.md,
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.md,
-      borderRadius: RADIUS.md,
-    },
-    emptyCtaText: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  });
-}
+  // Modals
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: "#fff", borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: SPACING.xl, minHeight: 400 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: SPACING.xl },
+  modalTitle: { fontSize: 18, fontWeight: "800", color: CLAY.ink },
+  modalLabel: { fontSize: 13, fontWeight: "600", color: CLAY.inkSoft, marginTop: SPACING.lg, marginBottom: SPACING.sm },
+  rangeGrid: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm },
+  rangeBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: RADIUS.sm, backgroundColor: CLAY.sunken },
+  rangeBtnActive: { backgroundColor: ACCENT.green },
+  rangeBtnText: { fontSize: 13, fontWeight: "600", color: CLAY.inkSoft },
+  rangeBtnTextActive: { color: "#fff" },
+  modalInput: { borderWidth: 1, borderColor: CLAY.hairline, borderRadius: RADIUS.sm, padding: SPACING.md, fontSize: 14, color: CLAY.ink, marginTop: SPACING.xs },
+  modalSubmitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: ACCENT.green, paddingVertical: SPACING.md, borderRadius: RADIUS.md, marginTop: SPACING.xxl },
+  modalSubmitBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  modalStateWrap: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: SPACING.xxl },
+  modalStateTitle: { fontSize: 18, fontWeight: "800", color: CLAY.ink, marginTop: SPACING.lg },
+  modalStateDesc: { fontSize: 14, color: CLAY.inkSoft, textAlign: "center", marginTop: SPACING.sm, lineHeight: 20 },
+});

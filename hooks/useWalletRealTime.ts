@@ -2,17 +2,22 @@
 import { supabase } from "@/lib/mysupabase/supabase";
 import { WalletAccount } from "@/lib/types/wallets";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export function useWalletRealtime(walletId?: string) {
   const queryClient = useQueryClient();
+  
+  // 1. Generate a unique ID for this specific component instance
+  const instanceId = useRef(Math.random().toString(36).substring(2, 9));
 
   useEffect(() => {
     if (!walletId) return;
 
-    // Subscribe to account changes linked to this wallet
+    // 2. Append the unique instance ID to the channel name
+    const channelName = `wallet-${walletId}-${instanceId.current}`;
+
     const channel = supabase
-      .channel(`wallet-${walletId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -22,7 +27,6 @@ export function useWalletRealtime(walletId?: string) {
           filter: `wallet_id=eq.${walletId}`, // only this wallet
         },
         () => {
-          // Invalidate the accounts query — it refetches automatically
           queryClient.invalidateQueries({
             queryKey: ["wallet", walletId, "accounts"],
           });
@@ -36,7 +40,6 @@ export function useWalletRealtime(walletId?: string) {
           table: "accounts",
         },
         () => {
-          // Balance changes affect this wallet's accounts
           queryClient.invalidateQueries({
             queryKey: ["wallet", walletId, "accounts"],
           });
@@ -51,7 +54,6 @@ export function useWalletRealtime(walletId?: string) {
           filter: `id=eq.${walletId}`,
         },
         () => {
-          // Wallet itself changed
           queryClient.invalidateQueries({
             queryKey: ["wallet"],
           });
@@ -66,8 +68,6 @@ export function useWalletRealtime(walletId?: string) {
         },
         (payload) => {
           const updatedAccount = payload.new;
-
-          // Update the cached accounts list directly (no refetch)
           queryClient.setQueryData(
             ["wallet", walletId, "accounts"],
             (old: WalletAccount[] | undefined) => {
@@ -81,7 +81,7 @@ export function useWalletRealtime(walletId?: string) {
           );
         },
       )
-      .subscribe();
+      .subscribe(); // Make sure subscribe is ALWAYS at the very end
 
     // Cleanup on unmount or when walletId changes
     return () => {

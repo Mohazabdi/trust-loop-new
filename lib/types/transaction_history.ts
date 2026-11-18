@@ -8,5 +8,6 @@ export interface TransactionHistory {
   transaction_description?:string;
   account_involved:string;
   trans_ref:string;
-  date_of_transaction: string;
+  created_at: string; 
+  updated_at: string; 
 }
