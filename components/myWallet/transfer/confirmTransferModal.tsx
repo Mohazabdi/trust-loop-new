@@ -1,7 +1,6 @@
-// components/myWallet/transfer/confirmTransferModal.tsx
 import {
-    ACC_TYPE_UICONFIG_MAP,
-    RECIPIENT_TYPE_UICONFIG_MAP,
+  ACC_TYPE_UICONFIG_MAP,
+  RECIPIENT_TYPE_UICONFIG_MAP,
 } from "@/lib/configurations/financeMaps.config";
 import { Recipient } from "@/lib/types/recipients";
 import { WalletAccount } from "@/lib/types/wallets";
@@ -10,53 +9,57 @@ import { ConfirmTransferModalStyles } from "@/styles/wallet_styles/confirm_trans
 import { Calendar, CheckCircle, X } from "lucide-react-native";
 import { useMemo } from "react";
 import {
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Text,
-    TouchableOpacity,
-    TouchableWithoutFeedback,
-    View,
+  Modal,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
-import { TextInput } from "react-native-gesture-handler";
 
-interface TransferModalProps {
+interface ConfirmTransferModalProps {
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
   setIsPinModalOpen: (value: boolean) => void;
   amount: string;
-  description?: string;
-  handleDescription: (d: string) => void;
-  handleAmount: (a: string) => void;
   selectedAccount: WalletAccount | undefined;
+  
+  // Optional props for Transfer Mode
+  handleAmount?: (a: string) => void;
+  handleDescription?: (d: string) => void;
+  description?: string;
   selectedRecipient?: Recipient | undefined;
-  //transactionData?: TransactionInput;
+  setIsRecipientSheetOpen?: (val: boolean) => void;
+  setIsAccountSheetOpen?: (val: boolean) => void;
 }
 
 export default function ConfirmTransferModal({
-  //transactionData,
   isOpen,
   setIsOpen,
   amount,
   selectedAccount,
-  selectedRecipient,
-  description,
-  handleDescription,
-  handleAmount,
   setIsPinModalOpen,
-}: TransferModalProps) {
-  const { theme, setIsRecipientSheetOpen, setIsAccountSheetOpen } =
-    useGlobalStorage();
+  handleAmount,
+  handleDescription,
+  description,
+  selectedRecipient,
+  setIsRecipientSheetOpen,
+  setIsAccountSheetOpen,
+}: ConfirmTransferModalProps) {
+  const { theme } = useGlobalStorage();
   const styles = useMemo(() => ConfirmTransferModalStyles(theme), [theme]);
 
-  const Account =
-    ACC_TYPE_UICONFIG_MAP[selectedAccount?.account_type ?? "personal"];
-  const Recipient =
-    RECIPIENT_TYPE_UICONFIG_MAP[selectedRecipient?.recipient_type ?? "user"];
+  const Account = ACC_TYPE_UICONFIG_MAP[selectedAccount?.account_type ?? "personal"];
+  const Recipient = RECIPIENT_TYPE_UICONFIG_MAP[selectedRecipient?.recipient_type ?? "user"];
+  
+  // If handleAmount exists, we are in "Transfer" mode. Otherwise, "Deposit" mode.
+  const isTransferMode = !!handleAmount;
+
   const handleConfirm = () => {
     setIsOpen(false);
     setIsPinModalOpen(true);
   };
+
   const formattedDate = new Date()
     .toLocaleDateString("en-GB", {
       day: "2-digit",
@@ -64,110 +67,123 @@ export default function ConfirmTransferModal({
       year: "numeric",
     })
     .replace(/ /g, "-");
-  if (!isOpen) {
-    return null;
-  } else {
-    Keyboard.dismiss();
-    return (
-      <>
-        {/* <Modal
-          visible={isOpen}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setIsOpen(false)}
-        > */}
-        <TouchableWithoutFeedback
-          onPress={Keyboard.dismiss}
-          // style={{ backgroundColor: "#913232" }}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              backgroundColor: "transparent",
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              alignItems: "center",
-            }}
-          >
-            <View style={styles.container}>
-              <View style={styles.modalCard}>
-                {/* Header */}
-                <View style={styles.header}>
-                  <Text style={styles.headerTitle}>Confirm Send</Text>
-                  <TouchableOpacity
-                    onPress={() => setIsOpen(false)}
-                    style={styles.closeButton}
-                  >
-                    <X size={18} color={theme.textSecondary} />
-                  </TouchableOpacity>
-                </View>
 
-                {/* Amount  */}
-                <Text style={styles.amountLabel}>Amount</Text>
-                <View style={styles.amountSection}>
-                  <TextInput
-                    // ref={amountRef}
-                    inputMode="decimal"
-                    value={amount?.toString() ?? ""}
-                    onChangeText={handleAmount}
-                    placeholder="Amount"
-                    placeholderTextColor={theme.textSecondary}
-                    style={styles.amountValue}
-                  />
-                  <Text style={styles.amountValue}> KES</Text>
-                </View>
-
-                {/* Fee & Total */}
-                <View style={styles.detailsRow}>
-                  <Text style={styles.detailLabel}>Fee</Text>
-                  <Text style={styles.detailValue}>0.00 KES</Text>
-                </View>
-                <View style={[styles.detailsRow, styles.totalRow]}>
-                  <Text style={styles.totalLabel}>Total</Text>
-                  <Text style={styles.totalValue}>{amount} KES</Text>
-                </View>
-
-                {/* Source Account */}
-                <TouchableOpacity
-                  onPress={() => setIsAccountSheetOpen(true)}
-                  style={styles.infoRow}
-                >
-                  <Account.icon size={16} color={theme.textSecondary} />
-                  <Text style={styles.infoLabel}>From</Text>
-                  <Text style={styles.infoValue}>{Account.label}</Text>
-                  <Text style={styles.infoSubtext}>
-                    {selectedAccount?.account_name}
-                  </Text>
+  return (
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setIsOpen(false)}
+    >
+      <TouchableWithoutFeedback onPress={() => setIsOpen(false)}>
+        <View style={styles.overlay}>
+          <TouchableWithoutFeedback>
+            <View style={styles.modalCard}>
+              
+              {/* Header */}
+              <View style={styles.header}>
+                <Text style={styles.headerTitle}>
+                  {isTransferMode ? "Confirm Send" : "Confirm Deposit"}
+                </Text>
+                <TouchableOpacity onPress={() => setIsOpen(false)} style={styles.closeButton}>
+                  <X size={20} color={theme.textSecondary} />
                 </TouchableOpacity>
+              </View>
 
-                {/* Recipient */}
+              {/* Amount Section */}
+              <Text style={styles.amountLabel}>
+                {isTransferMode ? "Amount" : "You are depositing"}
+              </Text>
+              <View style={styles.amountSection}>
+                {isTransferMode ? (
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <TextInput
+                      inputMode="decimal"
+                      value={amount?.toString() ?? ""}
+                      onChangeText={handleAmount}
+                      placeholder="0.00"
+                      placeholderTextColor={theme.textSecondary}
+                      style={styles.amountValueInput}
+                    />
+                    <Text style={styles.amountValue}> KES</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.amountValue}>
+                    KES {Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </Text>
+                )}
+              </View>
+
+              {/* Fee & Total */}
+              <View style={styles.detailsRow}>
+                <Text style={styles.detailLabel}>Fee</Text>
+                <Text style={styles.detailValue}>KES 0.00</Text>
+              </View>
+              <View style={[styles.detailsRow, styles.totalRow]}>
+                <Text style={styles.totalLabel}>
+                  {isTransferMode ? "Total to send" : "Total to be received"}
+                </Text>
+                <Text style={styles.totalValue}>
+                  KES {Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </Text>
+              </View>
+
+              {/* Source Account (Only for Transfers) */}
+              {isTransferMode && (
                 <TouchableOpacity
-                  onPress={() => setIsRecipientSheetOpen(true)}
+                  onPress={() => setIsAccountSheetOpen?.(true)}
                   style={styles.infoRow}
                 >
-                  <Recipient.icon size={16} color={theme.textSecondary} />
-                  <Text style={styles.infoLabel}>To</Text>
+                  <View style={styles.iconWrap}>
+                    <Account.icon size={20} color={theme.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.infoLabel}>From</Text>
+                    <Text style={styles.infoValue}>{Account.label}</Text>
+                    <Text style={styles.infoSubtext}>{selectedAccount?.account_name}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* Destination / Recipient */}
+              <TouchableOpacity
+                onPress={() => isTransferMode && setIsRecipientSheetOpen?.(true)}
+                disabled={!isTransferMode}
+                style={styles.infoRow}
+              >
+                <View style={styles.iconWrap}>
+                  {isTransferMode ? (
+                    <Recipient.icon size={20} color={theme.primary} />
+                  ) : (
+                    <Account.icon size={20} color={theme.primary} />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.infoLabel}>
+                    {isTransferMode ? "To" : "To Account"}
+                  </Text>
                   <Text style={styles.infoValue}>
-                    {selectedRecipient?.recipient_name}
+                    {isTransferMode 
+                      ? selectedRecipient?.recipient_name 
+                      : selectedAccount?.account_name}
                   </Text>
                   <Text style={styles.infoSubtext}>
-                    {selectedRecipient?.account_number}
+                    {isTransferMode 
+                      ? selectedRecipient?.account_number 
+                      : selectedAccount?.account_number}
                   </Text>
-                </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
 
-                {/* Date */}
+              {/* Description (Only for Transfers) */}
+              {isTransferMode && (
                 <View style={styles.dateRow}>
                   <TextInput
                     inputMode="text"
                     value={description}
                     onChangeText={handleDescription}
                     autoCapitalize="sentences"
-                    multiline={true}
+                    multiline
                     placeholder="What is this for?"
                     placeholderTextColor={theme.textSecondary}
                     style={styles.descriptionText}
@@ -175,29 +191,29 @@ export default function ConfirmTransferModal({
                   <Calendar size={14} color={theme.textSecondary} />
                   <Text style={styles.dateText}>{formattedDate}</Text>
                 </View>
+              )}
 
-                {/* Footer */}
-                <View style={styles.footer}>
-                  <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
-                    onPress={() => setIsOpen(false)}
-                  >
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.button, styles.confirmButton]}
-                    onPress={handleConfirm}
-                  >
-                    <CheckCircle size={20} color={theme.surface} />
-                    <Text style={styles.confirmButtonText}>Confirm</Text>
-                  </TouchableOpacity>
-                </View>
+              {/* Footer Actions */}
+              <View style={styles.footer}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={() => setIsOpen(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.confirmButton]}
+                  onPress={handleConfirm}
+                >
+                  <CheckCircle size={20} color={theme.surface} />
+                  <Text style={styles.confirmButtonText}>Confirm</Text>
+                </TouchableOpacity>
               </View>
+
             </View>
-          </KeyboardAvoidingView>
-        </TouchableWithoutFeedback>
-        {/* </Modal> */}
-      </>
-    );
-  }
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
 }

@@ -1,373 +1,219 @@
 import CustomWalletHeader from "@/components/myWallet/customHeader";
 import SelectedAccount from "@/components/myWallet/selectedAccount";
 import { useMemberData } from "@/hooks/useMemberData";
-import { ProviderFilters, useProviders } from "@/hooks/useProviders";
+import { useProviders } from "@/hooks/useProviders";
 import { useUserWallet } from "@/hooks/useUserWallet";
 import { useWalletAccounts } from "@/hooks/useWalletAccounts";
 import { TransactionInput } from "@/lib/types/transaction";
-
 import PinEntryModal from "@/components/myWallet/PinEntryModal";
 import ConfirmTransferModal from "@/components/myWallet/transfer/confirmTransferModal";
 import { useFinalizeTransaction } from "@/hooks/useFinalizeTransaction";
 import { useProcessTransaction } from "@/hooks/useProcessTransaction";
 import { useGlobalStorage } from "@/store/useGlobalStorage";
-import { useTransferFundsStorage } from "@/store/useTransferFundsStorage";
-import { TransferFundsScreenStyles } from "@/styles/wallet_styles/transfer_funds_screen.styles";
+import { DepositFundsScreenStyles } from "@/styles/wallet_styles/deposit_funds_screen.styles";
 import { processKenyanPhone } from "@/utils/custom_functions";
 import * as Crypto from "expo-crypto";
 import { useRouter } from "expo-router";
-import {
-    ArrowBigUpDash,
-    Banknote,
-    BellIcon,
-    ChevronDown,
-    ChevronLeft,
-    CreditCard,
-    Smartphone,
-} from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-    findNodeHandle,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from "react-native";
+import { Banknote, BellIcon, ChevronDown, ChevronLeft, Smartphone } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { toast } from "sonner-native";
 import BottomSheet from "@gorhom/bottom-sheet";
+import { useRef } from "react";
 import CustomBottomSheet from "@/components/CustomBottomSheet";
 import ListOfAccounts from "@/components/myWallet/listOfAccounts";
-export default function DepositFunds() {
-    const bottomAccountsSheetRef = useRef<BottomSheet>(null);
-    const openAccountsSheet = () => bottomAccountsSheetRef.current?.snapToIndex(0);
-  const closeAccountsSheet = () => bottomAccountsSheetRef.current?.close();
-  
-  const {
-    data: member,
-    isLoading: memberLoading,
-    error: memberError,
-  } = useMemberData();
-  const {
-    data: wallet,
-    isLoading: walletLoading,
-    error: walletError,
-  } = useUserWallet(member?.id);
-  const {
-    data: accounts,
-    isLoading: accountsLoading,
-    error: accountsError,
-  } = useWalletAccounts(wallet?.wallet_id);
-  const {
-    theme,
-    setIsNotificationOpen,
-    // setIsRecipientSheetOpen,
-    // setIsAccountSheetOpen,
-  } = useGlobalStorage();
+import { WalletAccount } from "@/lib/types/wallets";
 
-  const mobileMoneyProvidorFilter: ProviderFilters = {
-    provider_types: new Set(["mobile_money"]),
-  };
-  const { data: providers = [] } = useProviders(mobileMoneyProvidorFilter);
+export default function DepositFunds() {
+  const router = useRouter();
+  const { theme, setIsNotificationOpen } = useGlobalStorage();
+  
+  // Data Hooks
+  const { data: member } = useMemberData();
+  const { data: wallet } = useUserWallet(member?.id);
+  const { data: accounts } = useWalletAccounts(wallet?.wallet_id);
+  const { data: providers = [] } = useProviders({ provider_types: new Set(["mobile_money"]) });
+  
+  // Mutations
   const mutation = useProcessTransaction();
   const finalize = useFinalizeTransaction();
-  const idempotencyKey = Crypto.randomUUID();
-  const styles = useMemo(() => TransferFundsScreenStyles(theme), [theme]);
-  const scrollRef = useRef<ScrollView>(null);
-  const sourceAccountRef = useRef<View>(null);
-  const amountRef = useRef<TextInput>(null);
-  const mpesaPhoneInputRef = useRef<TextInput>(null);
+  const idempotencyKey = useMemo(() => Crypto.randomUUID(), []);
 
+  // Local State (No global store needed for this screen!)
+  const [selectedAccount, setSelectedAccount] = useState<WalletAccount | undefined>();
+  const [amount, setAmount] = useState("");
+  const [mpesaPhoneInput, setMpesaPhoneInput] = useState("");
+  const [errors, setErrors] = useState<{ account?: string; amount?: string; phone?: string }>({});
+  
+  // Modal State
   const [confirmDeposit, setConfirmDeposit] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [transactionData, setTransactionData] = useState<TransactionInput>();
-  const { selectedAccount, setSelectedAccount, setNoOfUserAccounts } =
-    useTransferFundsStorage();
-  const router = useRouter();
 
-  const leftAction = () => {
-    router.back();
-  };
-  const rightAction = useCallback(() => {
-    console.log("RightAction");
-    setIsNotificationOpen(true);
-  }, [setIsNotificationOpen]);
-  const [amount, setAmount] = useState("");
-  const [mpesaPhoneInput, setMpesaPhoneInput] = useState("");
-  const { isValid, formatted } = useMemo(
+  // Bottom Sheet Ref
+  const bottomAccountsSheetRef = useRef<BottomSheet>(null);
+
+  // Auto-select first account on load
+  useEffect(() => {
+    if (accounts && accounts.length > 0 && !selectedAccount) {
+      setSelectedAccount(accounts[0]);
+    }
+  }, [accounts]);
+
+  const { isValid: isPhoneValid, formatted: formattedPhone } = useMemo(
     () => processKenyanPhone(mpesaPhoneInput),
-    [mpesaPhoneInput],
+    [mpesaPhoneInput]
   );
-  const handleAmount = (text: string) => {
+
+  const handleAmountChange = (text: string) => {
     const cleanNumber = text.replace(/[^0-9.]/g, "");
     const parts = cleanNumber.split(".");
-    if (parts.length > 2) return;
-    setAmount(cleanNumber);
-    const numericValue = parseFloat(cleanNumber);
+    if (parts.length <= 2) setAmount(cleanNumber);
   };
-  // const handleMpesaPhoneInput = (text: string) => {
-  //   setMpesaPhoneInput(text);
-  // };
-  const handleAccountDrawerOpening = () => {
-    Keyboard.dismiss();
-    openAccountsSheet();
-  };
+
   const handleInitiateDeposit = () => {
-    const scrollNode = findNodeHandle(scrollRef.current);
-    if (!selectedAccount) {
-      toast("Please select a Destination Account ", {
-        position: "top-center",
-        icon: <CreditCard color={theme.warning} size={20} />,
-      });
-      const sourceNode = findNodeHandle(sourceAccountRef.current);
+    Keyboard.dismiss();
+    const newErrors: typeof errors = {};
 
-      if (scrollNode && sourceNode) {
-        sourceAccountRef.current?.measure(
-          (x, y, width, height, pageX, pageY) => {
-            scrollRef.current?.scrollTo({ y: pageY - 100, animated: true });
-            handleAccountDrawerOpening();
-          },
-        );
-      }
-      return;
-    }
-    if (!amount) {
-      toast("Specify the Amount you want to Deposit from Mpesa", {
-        position: "top-center",
-        icon: <Banknote color={theme.warning} size={20} />,
-      });
-      const sourceNode = findNodeHandle(amountRef.current);
-      if (scrollNode && sourceNode) {
-        amountRef.current?.measure((y) => {
-          scrollRef.current?.scrollTo({ y: y - 20, animated: true });
-          amountRef.current?.focus();
-        });
-      }
-      return;
-    }
-    if (!mpesaPhoneInput) {
-      toast("Enter mpesa phone Number to initiate stk push", {
-        position: "top-center",
-        icon: <Smartphone color={theme.warning} size={20} />,
-      });
-      const sourceNode = findNodeHandle(mpesaPhoneInputRef.current);
-      if (scrollNode && sourceNode) {
-        mpesaPhoneInputRef.current?.measure((y) => {
-          scrollRef.current?.scrollTo({ y: y - 20, animated: true });
-          mpesaPhoneInputRef.current?.focus();
-        });
-      }
-      return;
-    } else {
-      const mobileMoneyProvidor = providers[0];
-      setTransactionData({
-        currency: selectedAccount.currency_code,
-        idempotency_key: idempotencyKey,
-        destination_acc: selectedAccount.account_id,
-        initiator_id: member?.id || "",
-        providor_id: mobileMoneyProvidor.id || "",
-        source_acc: mobileMoneyProvidor.provider_acc_id || "",
-        source_wallet_id: wallet?.wallet_id || "",
-        trans_amount: parseFloat(amount) || 0,
-        trans_category_id: "Mpesa Deposit",
-        trans_type: "deposit",
-        trans_description: `Made a Deposit from mpesa via phone ${mpesaPhoneInput}`,
-      });
-      setConfirmDeposit(true);
-      Keyboard.dismiss();
-    }
+    if (!selectedAccount) newErrors.account = "Please select a destination account";
+    if (!amount) newErrors.amount = "Specify the amount you want to deposit";
+    if (!mpesaPhoneInput) newErrors.phone = "Enter M-Pesa phone number to initiate STK push";
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) return;
+
+    // Prepare data for confirm modal
+    const mobileMoneyProvider = providers[0];
+    setTransactionData({
+      currency: selectedAccount!.currency_code,
+      idempotency_key: idempotencyKey,
+      destination_acc: selectedAccount!.account_id,
+      initiator_id: member?.id || "",
+      providor_id: mobileMoneyProvider.id || "",
+      source_acc: mobileMoneyProvider.provider_acc_id || "",
+      source_wallet_id: wallet?.wallet_id || "",
+      trans_amount: parseFloat(amount) || 0,
+      trans_category_id: "Mpesa Deposit",
+      trans_type: "deposit",
+      trans_description: `Deposited from M-Pesa via phone ${mpesaPhoneInput}`,
+    });
+    setConfirmDeposit(true);
   };
 
-  const handleDeposit = async () => {
-    if (!transactionData) {
-      toast.error("Transaction details missing. Please try again.");
-      return;
-    }
+  const handleDeposit = async (pin: string) => {
+    if (!transactionData) return;
+    setIsPinModalOpen(false);
 
     try {
-      const result = await mutation.mutateAsync(transactionData);
-      console.log("Transaction completed:", result);
+      const result = await mutation.mutateAsync({ ...transactionData, pin });
+      
       try {
         await finalize.mutateAsync({
           idempotency_id: result.data?.idempotency_id ?? "",
           transaction_id: result.data?.transaction_id ?? "",
           transaction_status: "completed",
         });
-      } catch (finError: any) {
-        console.error("Finalize Failed ,transction proced", finError);
+      } catch {
         toast.warning("Transaction processed but confirmation pending.");
       }
-      toast.success("Money Deposited from Mpesa successfully!");
+
+      toast.success("Money Deposited from M-Pesa successfully!");
       router.push({
         pathname: "/(tabs)/wallet/receipt",
         params: { transaction_id: result.data?.transaction_id },
       });
     } catch (error: any) {
-      //console.error("Transaction failed:", error.message);
-      toast.error(error.message || "Transfer failed. Please try again.");
+      toast.error(error.message || "Deposit failed. Please try again.");
     }
   };
-  useEffect(() => {
-    accounts
-      ? (setSelectedAccount(accounts[0]), setNoOfUserAccounts(accounts?.length))
-      : setSelectedAccount(undefined);
-  }, [accounts]);
+
+  const styles = useMemo(() => DepositFundsScreenStyles(theme), [theme]);
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <CustomWalletHeader
         subTitle="Deposit Money"
-        leftAction={{ icon: ChevronLeft, action: leftAction }}
-        rightAction={{
-          icon: BellIcon,
-          action: rightAction,
-        }}
+        leftAction={{ icon: ChevronLeft, action: () => router.back() }}
+        rightAction={{ icon: BellIcon, action: () => setIsNotificationOpen(true) }}
       />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <ScrollView
-          ref={scrollRef}
-          showsVerticalScrollIndicator={false}
-          style={styles.scrollArea}
-          contentContainerStyle={{ flexGrow: 1 }}
-        >
-          <View ref={sourceAccountRef}>
-            <View style={styles.sectionOptions}>
-              <Text style={styles.sectionOptionsTitle}>
-                Destination Account *
-              </Text>
-              <TouchableOpacity
-                style={styles.selectAction}
-                onPress={() => handleAccountDrawerOpening()}
-              >
-                <Text style={styles.selectActionText}>Select Account</Text>
-                <ChevronDown color={theme.surface} size={20} />
-              </TouchableOpacity>
-            </View>
+      
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, flexGrow: 1 }}>
+          
+          {/* 1. Account Selection */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={styles.label}>Destination Account *</Text>
             {selectedAccount ? (
-              <SelectedAccount
-                account={selectedAccount}
-                openBottomSheet={() => handleAccountDrawerOpening()}
-              />
+              <SelectedAccount account={selectedAccount} openBottomSheet={() => bottomAccountsSheetRef.current?.snapToIndex(0)} />
             ) : (
-              <View style={styles.emptyAccountContainer}>
-                <TouchableOpacity
-                  style={styles.emptyAccountCard}
-                  onPress={() => handleAccountDrawerOpening()}
-                >
-                  <Text style={styles.emptyAccountSectionTitle}>
-                    No Account has been selected tap to select an account
-                  </Text>
-                  <ArrowBigUpDash color={theme.textSecondary} size={62} />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity style={styles.emptyAccountCard} onPress={() => bottomAccountsSheetRef.current?.snapToIndex(0)}>
+                <Text style={styles.emptyText}>Select an Account</Text>
+                <ChevronDown color={theme.textSecondary} size={20} />
+              </TouchableOpacity>
             )}
+            {errors.account && <Text style={styles.errorText}>{errors.account}</Text>}
           </View>
 
-          <View style={{ padding: 16 }}>
-            <Text style={styles.sectionOptionsTitle}>Amount *</Text>
-            <TextInput
-              ref={amountRef}
-              inputMode="decimal"
-              value={amount?.toString() ?? ""}
-              onChangeText={handleAmount}
-              placeholder="0.00"
-              placeholderTextColor={theme.textSecondary}
-              style={styles.amountInput}
-            />
-            <Text
-              style={{
-                color: theme.textSecondary,
-                marginBottom: 8,
-                fontWeight: "600",
-                fontSize: 17,
-              }}
-            >
-              Enter Mpesa Phone Number *
-            </Text>
+          {/* 2. Hero Amount Input */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={styles.label}>Amount *</Text>
+            <View style={styles.amountWrapper}>
+              <Text style={styles.currencySymbol}>KES</Text>
+              <TextInput
+                inputMode="decimal"
+                value={amount}
+                onChangeText={handleAmountChange}
+                placeholder="0.00"
+                placeholderTextColor={theme.textSecondary}
+                style={styles.heroAmountInput}
+              />
+            </View>
+            {errors.amount && <Text style={styles.errorText}>{errors.amount}</Text>}
+          </View>
+
+          {/* 3. M-Pesa Phone Input */}
+          <View style={{ marginBottom: 24 }}>
+            <Text style={styles.label}>M-Pesa Phone Number *</Text>
             <TextInput
               value={mpesaPhoneInput}
-              ref={mpesaPhoneInputRef}
               onChangeText={setMpesaPhoneInput}
               keyboardType="phone-pad"
-              style={{
-                backgroundColor: theme.surface,
-                color: theme.text,
-                padding: 12,
-                fontSize: 20,
-                fontWeight: "bold",
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor:
-                  mpesaPhoneInput.length > 0
-                    ? isValid
-                      ? theme.success
-                      : theme.error
-                    : theme.border,
-              }}
-              placeholder="+254xx"
+              style={[styles.input, mpesaPhoneInput.length > 0 && { borderColor: isPhoneValid ? theme.success : theme.error }]}
+              placeholder="+254 7XX XXX XXX"
               placeholderTextColor={theme.textSecondary}
             />
-
-            {/* Feedback for the user */}
-            {isValid && (
-              <Text
-                style={{ color: theme.success, fontSize: 12, marginTop: 4 }}
-              >
-                initiate stk from: {formatted}
-              </Text>
-            )}
+            {isPhoneValid && <Text style={styles.successText}>STK push will be sent to: {formattedPhone}</Text>}
+            {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
           </View>
         </ScrollView>
 
+        {/* 4. Footer Action */}
         <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.initiateButton,
-              { borderColor: amount ? theme.success : theme.border },
-            ]}
-            onPress={handleInitiateDeposit}
-            // disabled={!amount ? true : false}
-          >
-            <Text style={styles.buttonText}>Initiate Deposit</Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleInitiateDeposit}>
+            <Text style={styles.primaryButtonText}>Initiate Deposit</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Modals */}
       <ConfirmTransferModal
         isOpen={confirmDeposit}
         setIsOpen={setConfirmDeposit}
         setIsPinModalOpen={setIsPinModalOpen}
         amount={amount}
         selectedAccount={selectedAccount}
-        //selectedRecipient={selectedRecipient}
-        //description={description}
-        handleDescription={() => console.log(`Nothing here`)}
-        handleAmount={handleAmount}
       />
       <PinEntryModal
         isOpen={isPinModalOpen}
         setIsOpen={setIsPinModalOpen}
         amount={parseFloat(amount)}
-        handleSend={handleDeposit}
-        // onRetry={() => setIsPinModalOpen(true)}
+        onSubmit={handleDeposit} // <--- Passes PIN to our handler!
       />
-            <CustomBottomSheet
-        ref={bottomAccountsSheetRef}
-        title="My Sheet Title"
-        snapPoints={["70%"]}
-      >
-     <ListOfAccounts
-                      closeBottomSheet={() =>{
-                        //bottomAccountSheetRef.current?.close()
-                      closeAccountsSheet()
-                      }
-                      }
-                    />
+
+      <CustomBottomSheet ref={bottomAccountsSheetRef} title="Select Destination Account" snapPoints={["70%"]}>
+        <ListOfAccounts closeBottomSheet={() => bottomAccountsSheetRef.current?.close()} />
       </CustomBottomSheet>
     </SafeAreaView>
   );

@@ -4,6 +4,7 @@ export interface MemberProfile {
   auth_id: string;
   first_name: string;
   last_name: string;
+  phone_number?: string; 
   date_of_register: string;
   is_active: boolean;
 }

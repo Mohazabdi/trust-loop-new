@@ -57,7 +57,7 @@ export default function BalanceHeroSection({
               />
             </View>
             <View style={styles.headerRight}>
-              <Wifi size={20} color={theme.success} />
+              
             </View>
           </View>
 
@@ -76,20 +76,6 @@ export default function BalanceHeroSection({
                 .........
               </Text>
             )}
-          </View>
-
-          <View style={styles.footer}>
-            <View style={styles.footerCurrencyContainer}>
-              <Text style={[styles.footerCurrencyText, { color: theme.surface }]}>
-                {isPrivacyOn ? currency_code : "..."}
-              </Text>
-            </View>
-            <View style={styles.footerBalanceTypeContainer}>
-              <Text style={[styles.footerBalanceTypeText, { color: theme.surface }]}>
-                Available Balance for {balances.length} account
-                {balances.length > 1 ? "s" : ""}
-              </Text>
-            </View>
           </View>
         </View>
 

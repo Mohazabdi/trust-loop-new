@@ -20,6 +20,7 @@ export function useProcessTransaction() {
         p_providor_id: input.providor_id,
         p_idempotency_key: input.idempotency_key,
         p_trans_description: input.trans_description || null,
+        p_pin: input.pin,
       });
 
       if (error) throw new Error(error.message);

@@ -5,7 +5,7 @@ export const MywalletScreenStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.background,
+      backgroundColor: "#F5F7FA",
       minHeight: SCREEN_HEIGHT,
       minWidth: SCREEN_WIDTH,
       padding: 10,

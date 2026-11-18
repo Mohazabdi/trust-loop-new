@@ -10,6 +10,7 @@ export interface TransactionInput {
   providor_id: string | null;
   idempotency_key: string;
   trans_description?: string;
+  pin?: string;
 }
 
 export interface TransactionResult {
