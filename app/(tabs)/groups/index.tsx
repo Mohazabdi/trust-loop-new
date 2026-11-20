@@ -7,30 +7,25 @@ import { useMemberData } from "@/hooks/useMemberData";
 import { useMemberInvites } from "@/hooks/useMemberInvites";
 import { useDiscoverableGroups } from "@/hooks/useDiscoverableGroups";
 import { useJoinRequests } from "@/hooks/useJoinRequests";
-import { useGlobalStorage } from "@/store/useGlobalStorage";
 import { useSaccoStorage } from "@/store/useSaccoStorage";
 import { supabase } from "@/lib/mysupabase/supabase";
 import { useNotificationBadge } from "@/hooks/useNotificationBadge";
 import { useMemberJoinRequestMessages } from "@/hooks/useMemberJoinRequestMessages";
 import type { SasraLicenseCategory } from "@/lib/types/sacco";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
-  Bell, BellIcon, Check, CheckCircle, ChevronLeft, ChevronRight,
-  Clock, Eye, Inbox, MailOpen, MessageSquare, Plus, Search, Send,
-  Users, X, XCircle,
+  Bell, BellIcon, Check, CheckCircle, ChevronLeft, ChevronRight, Clock, Compass, Eye, Inbox,
+  MailOpen, MessageSquare, Plus, Search, Send, Users, X, XCircle,
 } from "lucide-react-native";
-import React, {
-  useMemo, useState, useCallback, useRef, useEffect,
-} from "react";
+import React, { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import type { ReactNode } from "react";
-import type { StyleProp, ViewStyle } from "react-native";
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform,
-  RefreshControl, ScrollView, StyleSheet, Text, TextInput,
-  TouchableOpacity, useWindowDimensions, View,
+  ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Modal,
+  Platform, RefreshControl,
+  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -40,56 +35,43 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import type { SharedValue } from "react-native-reanimated";
 
 import { useTabBarBottomInset } from "@/lib/layout/tabBar";
+import { openGroup as navigateToGroup } from "@/lib/navigation/openGroup";
 
-/* ------------------------------------------------------------------ */
-/*  Constants                                                         */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  DESIGN TOKENS — shared with the Home dashboard                    */
+/* ================================================================== */
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28, huge: 40 } as const;
+const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
+
+const CLAY = {
+  canvas: "#F5F7FA",
+  surface: "#FFFFFF",
+  sunken: "#EDF1F7",
+  ink: "#1E293B",
+  inkSoft: "#64748B",
+  inkFaint: "#94A3B8",
+  skeleton: "#E2E8F0",
+} as const;
+
+const ACCENT = {
+  green: "#3E9B62",
+  greenSoft: "#DBEFE1",
+  red: "#CF6B6B",
+  redSoft: "#FAE3E3",
+  navy: "#4B6FA6",
+  navySoft: "#E1E9F5",
+  amber: "#C08A3E",
+  amberSoft: "#F7EAD8",
+} as const;
 
 const DISCOVER_CARD_WIDTH = 250;
 const DISCOVER_CARD_GAP = 10;
 const DISCOVER_INTERVAL = DISCOVER_CARD_WIDTH + DISCOVER_CARD_GAP;
-
-/* ------------------------------------------------------------------ */
-/*  Design tokens — balanced claymorphism                             */
-/* ------------------------------------------------------------------ */
-
-const CLAY = {
-  canvas: "#D9E0EC",
-  surface: "#F0F4FA",
-  surfaceRaised: "#F7FAFE",
-  sunken: "#C8D1DF",
-  highlight: "#FFFFFF",
-  shade: "rgba(71, 85, 105, 0.44)",
-  shadeSoft: "rgba(71, 85, 105, 0.28)",
-  ink: "#1A2438",
-  inkSoft: "#4A566B",
-  inkFaint: "#8A94A8",
-  hairline: "rgba(71, 85, 105, 0.14)",
-} as const;
-
-const ACCENT = {
-  green: "#2F7A4E",
-  greenSoft: "#CFE6D8",
-  red: "#A64A4A",
-  redSoft: "#EDCECE",
-  purple: "#5B4B9E",
-  purpleSoft: "#DCD5F0",
-  navy: "#2F4F8A",
-  navySoft: "#CBD7EE",
-  amber: "#96632A",
-  amberSoft: "#EBD8B8",
-  teal: "#2E7A73",
-  tealSoft: "#CBE4E1",
-} as const;
-
-const RADIUS = { sm: 10, md: 14, lg: 20, xl: 26 } as const;
-const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 28 } as const;
-
-/* ------------------------------------------------------------------ */
-/*  Unified group shape — community + SACCO normalised to one list    */
-/* ------------------------------------------------------------------ */
+const DISCOVER_SIDE_PADDING = (SCREEN_WIDTH - DISCOVER_CARD_WIDTH) / 2;
 
 type UnifiedGroup = {
   kind: "community" | "sacco";
@@ -102,184 +84,252 @@ type UnifiedGroup = {
   sasraVerified?: boolean;
 };
 
-/* ------------------------------------------------------------------ */
-/*  Clay primitive — a two-layer moulded surface                      */
-/* ------------------------------------------------------------------ */
+type JoinState = "ask" | "pending" | "approved";
 
-function Clay({
-  children,
-  color = CLAY.surface,
-  radius = RADIUS.lg,
-  highlight = CLAY.highlight,
-  shade = CLAY.shade,
-  depth = 1,
-  inset = false,
-  style,
-  bodyStyle,
-}: {
-  children: ReactNode;
-  color?: string;
-  radius?: number;
-  highlight?: string;
-  shade?: string;
-  depth?: number;
-  inset?: boolean;
-  style?: StyleProp<ViewStyle>;
-  bodyStyle?: StyleProp<ViewStyle>;
-}) {
-  const offset = 4 + depth * 2;
-  const drop = offset + 2;
+const plural = (n: number) => `${n} member${n !== 1 ? "s" : ""}`;
 
-  if (inset) {
-    return (
-      <View
-        style={[
-          {
-            backgroundColor: color,
-            borderRadius: radius,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: CLAY.hairline,
-            shadowColor: highlight,
-            shadowOffset: { width: -2, height: -2 },
-            shadowOpacity: 0.6,
-            shadowRadius: 4,
-          },
-          style,
-        ]}
-      >
-        <View
-          style={[
-            {
-              backgroundColor: color,
-              borderRadius: radius,
-              shadowColor: CLAY.shadeSoft,
-              shadowOffset: { width: 3, height: 3 },
-              shadowOpacity: 0.85,
-              shadowRadius: 6,
-            },
-            bodyStyle,
-          ]}
-        >
-          {children}
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View
-      style={[
-        {
-          backgroundColor: color,
-          borderRadius: radius,
-          shadowColor: shade,
-          shadowOffset: { width: drop, height: drop },
-          shadowOpacity: 1,
-          shadowRadius: drop * 1.65,
-          elevation: 3 + depth * 3,
-        },
-        style,
-      ]}
-    >
-      <View
-        style={[
-          {
-            backgroundColor: color,
-            borderRadius: radius,
-            shadowColor: highlight,
-            shadowOffset: { width: -offset, height: -offset },
-            shadowOpacity: 1,
-            shadowRadius: offset * 1.25,
-          },
-          bodyStyle,
-        ]}
-      >
-        {children}
-      </View>
-    </View>
-  );
+function formatRelativeDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-/* ------------------------------------------------------------------ */
-/*  Screen                                                            */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  PRESENTATIONAL COMPONENTS                                         */
+/*  Defined at module level so they are NOT re-created on every       */
+/*  render (that remounting was what made parts vanish/flicker).      */
+/* ================================================================== */
+const SectionHeader = ({
+  title, count, hint, trailing, accent = ACCENT.navy,
+}: { title: string; count?: number; hint?: string; trailing?: ReactNode; accent?: string }) => (
+  <View style={styles.sectionHeader}>
+    <View style={styles.sectionHeaderRow}>
+      <View style={styles.sectionTitleRow}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {count !== undefined && count > 0 && (
+          <View style={[styles.sectionCountPill, { backgroundColor: `${accent}22` }]}>
+            <Text style={[styles.sectionCountText, { color: accent }]}>{count}</Text>
+          </View>
+        )}
+      </View>
+      {trailing}
+    </View>
+    {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
+  </View>
+);
 
+const GroupRow = ({ group, onPress }: { group: UnifiedGroup; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.6} style={styles.groupRow}>
+    <GroupAvatar name={group.name} seed={group.id} size={48} />
+    <View style={styles.groupBody}>
+      <View style={styles.groupNameRow}>
+        <Text numberOfLines={1} style={styles.groupName}>{group.name}</Text>
+        {group.kind === "sacco" && group.sasraCategory ? (
+          <SaccoBadge category={group.sasraCategory} verified={group.sasraVerified} size="sm" />
+        ) : null}
+      </View>
+      <View style={styles.groupMetaRow}>
+        <Users size={12} color={CLAY.inkSoft} strokeWidth={2.2} />
+        <Text style={styles.groupMeta}>{plural(group.memberCount)}</Text>
+        {group.unreadCount > 0 && (
+          <View style={styles.unreadPill}>
+            <Text style={styles.unreadText}>{group.unreadCount} new</Text>
+          </View>
+        )}
+      </View>
+    </View>
+    <ChevronRight size={18} color={CLAY.inkFaint} strokeWidth={2.2} />
+  </TouchableOpacity>
+);
+
+const InviteTile = ({
+  invite, onAccept, onDecline,
+}: { invite: any; onAccept: () => void; onDecline: () => void }) => (
+  <View style={styles.inviteTile}>
+    <View style={styles.inviteTop}>
+      <GroupAvatar name={invite.group_name} seed={invite.group_id ?? invite.invitation_id} size={42} />
+      <View style={styles.inviteText}>
+        <Text numberOfLines={1} style={styles.inviteName}>{invite.group_name}</Text>
+        <Text numberOfLines={1} style={styles.inviteMeta}>
+          {invite.inviter_first_name} {invite.inviter_last_name} invited you
+        </Text>
+      </View>
+      <View style={styles.inviteTag}>
+        <Text style={styles.inviteTagText}>Invite</Text>
+      </View>
+    </View>
+    <View style={styles.inviteActions}>
+      <TouchableOpacity onPress={onDecline} activeOpacity={0.8} style={[styles.inviteBtn, styles.inviteBtnGhost]}>
+        <Text style={styles.inviteBtnGhostText}>Decline</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onAccept} activeOpacity={0.8} style={[styles.inviteBtn, styles.inviteBtnPrimary]}>
+        <Text style={styles.inviteBtnPrimaryText}>Accept</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+const InvitesEmptyState = () => (
+  <View style={styles.emptyInline}>
+    <View style={styles.emptyInlineIcon}>
+      <MailOpen size={18} color={ACCENT.navy} strokeWidth={2.2} />
+    </View>
+    <View style={styles.emptyInlineText}>
+      <Text style={styles.emptyInlineTitle}>No pending invites</Text>
+      <Text style={styles.emptyInlineBody}>Group invitations from admins will land here</Text>
+    </View>
+  </View>
+);
+
+const DiscoverEmptyState = ({
+  searching, failed, onRetry,
+}: { searching: boolean; failed: boolean; onRetry: () => void }) => (
+  <View style={styles.sectionBody}>
+    <View style={styles.emptyBlock}>
+      <View style={styles.emptyIcon}>
+        <Compass size={22} color={ACCENT.navy} strokeWidth={2.2} />
+      </View>
+      <Text style={styles.emptyTitle}>
+        {failed ? "Couldn't load groups" : searching ? "No groups match your search" : "No groups to discover yet"}
+      </Text>
+      <Text style={styles.emptyBody}>
+        {failed
+          ? "Check your connection and try again"
+          : searching
+          ? "Try a different name or clear the search"
+          : "New groups looking for members will appear here"}
+      </Text>
+      {failed && (
+        <TouchableOpacity onPress={onRetry} activeOpacity={0.85} style={styles.emptyRetry}>
+          <Text style={styles.emptyRetryText}>Retry</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  </View>
+);
+
+const DiscoverSwipeHint = ({ total, activeIndex }: { total: number; activeIndex: number }) => {
+  if (total <= 1) return null;
+  const canGoLeft = activeIndex > 0;
+  const canGoRight = activeIndex < total - 1;
+  return (
+    <View style={styles.swipeHint}>
+      <ChevronLeft size={16} color={ACCENT.navy} strokeWidth={2.4} style={canGoLeft ? undefined : styles.chevronOff} />
+      <View style={styles.dotsRow}>
+        {Array.from({ length: total }).map((_, i) => (
+          <View key={i} style={[styles.dot, i === activeIndex && styles.dotActive]} />
+        ))}
+      </View>
+      <ChevronRight size={16} color={ACCENT.navy} strokeWidth={2.4} style={canGoRight ? undefined : styles.chevronOff} />
+    </View>
+  );
+};
+
+const JOIN_BUTTON = {
+  ask: { label: "Ask to join", Icon: Send, btn: "joinAsk", text: "joinAskText", color: "#fff" },
+  pending: { label: "Request sent", Icon: Clock, btn: "joinPending", text: "joinPendingText", color: ACCENT.amber },
+  approved: { label: "Invite pending", Icon: Check, btn: "joinApproved", text: "joinApprovedText", color: ACCENT.green },
+} as const;
+
+const DiscoverTile = ({
+  group, index, scrollX, state, submitting, onView, onAsk,
+}: {
+  group: any; index: number; scrollX: SharedValue<number>; state: JoinState;
+  submitting: boolean; onView: () => void; onAsk: () => void;
+}) => {
+  const cfg = JOIN_BUTTON[state];
+  const disabled = state !== "ask" || submitting;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const input = [(index - 1) * DISCOVER_INTERVAL, index * DISCOVER_INTERVAL, (index + 1) * DISCOVER_INTERVAL];
+    return {
+      opacity: interpolate(scrollX.value, input, [0.72, 1, 0.72], Extrapolation.CLAMP),
+      transform: [{ scale: interpolate(scrollX.value, input, [0.94, 1, 0.94], Extrapolation.CLAMP) }],
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.discoverTile, animatedStyle]}>
+      <View style={styles.discoverTop}>
+        <GroupAvatar name={group.group_name} seed={group.group_id} size={56} />
+        <Text numberOfLines={1} style={styles.discoverName}>{group.group_name}</Text>
+        <View style={styles.groupMetaRow}>
+          <Users size={12} color={CLAY.inkSoft} strokeWidth={2.2} />
+          <Text style={styles.groupMeta}>{plural(group.member_count)}</Text>
+        </View>
+      </View>
+
+      {group.group_description ? (
+        <Text numberOfLines={2} style={styles.discoverBody}>{group.group_description}</Text>
+      ) : null}
+
+      <View style={styles.discoverActions}>
+        <TouchableOpacity onPress={onView} activeOpacity={0.8} style={styles.discoverGhostBtn}>
+          <Eye size={14} color={CLAY.ink} strokeWidth={2.2} />
+          <Text style={styles.discoverGhostText}>View</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={onAsk}
+          disabled={disabled}
+          activeOpacity={0.85}
+          style={[styles.discoverPrimaryBtn, styles[cfg.btn]]}
+        >
+          {submitting ? (
+            <ActivityIndicator size="small" color={cfg.color} />
+          ) : (
+            <>
+              <cfg.Icon size={13} color={cfg.color} strokeWidth={2.4} />
+              <Text style={[styles.discoverPrimaryText, styles[cfg.text]]}>{cfg.label}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+};
+
+/* ================================================================== */
+/*  SCREEN                                                            */
+/* ================================================================== */
 export default function GroupIndexPage() {
   const router = useRouter();
-  const { width: SCREEN_WIDTH } = useWindowDimensions();
-  const { theme } = useGlobalStorage();
   const tabBarInset = useTabBarBottomInset();
+
+  const [messagesModalVisible, setMessagesModalVisible] = useState(false);
+  const { data: memberData } = useMemberData();
+  const memberId = memberData?.id;
+
+  const { groups: myGroups, loading: myGroupsLoading, error: myGroupsError, refetch: refetchMyGroups } = useGetMemberGroups();
+  const { invites: pendingInvites, loading: invitesLoading, error: invitesError, refetch: refetchInvites } = useMemberInvites(memberId);
+  const { groups: discoverableGroups, loading: discoverLoading, error: discoverError, refetch: refetchDiscover } = useDiscoverableGroups(memberId);
+  const { requestMap, refetch: refetchRequests, submitRequest, submitting } = useJoinRequests(memberId);
+  const { messages, loading: messagesLoading, error: messagesError, refetch: refetchMessages } = useMemberJoinRequestMessages(memberId);
+
+  /* ── SACCOs the current member belongs to (local storage) ── */
+  const allSaccos = useSaccoStorage((s) => s.saccos);
+  const mySaccos = useMemo(
+    () => allSaccos.filter((s) => s.members.some((m) => m.group_member_id === memberId && m.status === "active")),
+    [allSaccos, memberId]
+  );
+
+  const reviewedMessages = useMemo(() => messages.filter((m) => m.request_status !== "pending"), [messages]);
+  const { unreadCount: messagesBadgeCount, markAsSeen: markMessagesAsSeen } =
+    useNotificationBadge(`badge_join_messages_${memberId ?? "anon"}`, reviewedMessages);
 
   const openMessages = () => {
     markMessagesAsSeen();
     setMessagesModalVisible(true);
   };
 
-  const [messagesModalVisible, setMessagesModalVisible] = useState(false);
-  const { data: memberData } = useMemberData();
-  const memberId = memberData?.id;
-
-  const {
-    groups: myGroups,
-    loading: myGroupsLoading,
-    error: myGroupsError,
-    refetch: refetchMyGroups,
-  } = useGetMemberGroups();
-
-  const {
-    invites: pendingInvites,
-    loading: invitesLoading,
-    error: invitesError,
-    refetch: refetchInvites,
-  } = useMemberInvites(memberId);
-
-  const {
-    groups: discoverableGroups,
-    loading: discoverLoading,
-    error: discoverError,
-    refetch: refetchDiscover,
-  } = useDiscoverableGroups(memberId);
-
-  const {
-    requestMap,
-    refetch: refetchRequests,
-    submitRequest,
-    submitting,
-  } = useJoinRequests(memberId);
-
-  const {
-    messages,
-    loading: messagesLoading,
-    error: messagesError,
-    refetch: refetchMessages,
-  } = useMemberJoinRequestMessages(memberId);
-
-  /* ── SACCOs the current member belongs to (local storage) ─── */
-  const allSaccos = useSaccoStorage((s) => s.saccos);
-
-  const mySaccos = useMemo(
-    () =>
-      allSaccos.filter((s) =>
-        s.members.some(
-          (m) => m.group_member_id === memberId && m.status === "active"
-        )
-      ),
-    [allSaccos, memberId]
-  );
-
-  const reviewedMessages = useMemo(
-    () => messages.filter((m) => m.request_status !== "pending"),
-    [messages]
-  );
-
-  const { unreadCount: messagesBadgeCount, markAsSeen: markMessagesAsSeen } =
-    useNotificationBadge(
-      `badge_join_messages_${memberId ?? "anon"}`,
-      reviewedMessages
-    );
-
+  /* ── Refetch plumbing ── */
   const { refresh } = useLocalSearchParams<{ refresh?: string }>();
-
   const refetchMyGroupsRef = useRef(refetchMyGroups);
   const refetchInvitesRef = useRef(refetchInvites);
   const refetchDiscoverRef = useRef(refetchDiscover);
@@ -292,13 +342,24 @@ export default function GroupIndexPage() {
   useEffect(() => { refetchRequestsRef.current = refetchRequests; }, [refetchRequests]);
   useEffect(() => { refetchMessagesRef.current = refetchMessages; }, [refetchMessages]);
 
-  const refetchAll = useCallback(() => {
-    refetchMyGroupsRef.current();
-    refetchInvitesRef.current();
-    refetchDiscoverRef.current();
-    refetchRequestsRef.current();
-    refetchMessagesRef.current();
-  }, []);
+  const refetchAll = useCallback(
+    () =>
+      Promise.all([
+        refetchMyGroupsRef.current(),
+        refetchInvitesRef.current(),
+        refetchDiscoverRef.current(),
+        refetchRequestsRef.current(),
+        refetchMessagesRef.current(),
+      ]),
+    []
+  );
+
+  // Pull-to-refresh has its own state so the spinner never hangs on `loading`
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await refetchAll(); } finally { setRefreshing(false); }
+  }, [refetchAll]);
 
   const hasFetchedOnce = useRef(false);
   const prevRefresh = useRef(refresh);
@@ -317,6 +378,7 @@ export default function GroupIndexPage() {
     }, [refresh, refetchAll])
   );
 
+  /* ── Invite actions ── */
   const acceptInvite = async (invitationId: string) => {
     if (!memberId) return;
     try {
@@ -359,9 +421,9 @@ export default function GroupIndexPage() {
     }
   };
 
+  /* ── Search + unified list ── */
   const [searchText, setSearchText] = useState("");
 
-  /* ── Unified list — community groups + SACCOs ─────────────── */
   const unifiedGroups: UnifiedGroup[] = useMemo(() => {
     const community: UnifiedGroup[] = (myGroups ?? []).map((g: any) => ({
       kind: "community",
@@ -371,7 +433,6 @@ export default function GroupIndexPage() {
       memberCount: g.number_of_members ?? 0,
       unreadCount: g.no_of_unread_notifications ?? 0,
     }));
-
     const saccoList: UnifiedGroup[] = mySaccos.map((s) => ({
       kind: "sacco",
       id: s.sacco_id,
@@ -382,51 +443,28 @@ export default function GroupIndexPage() {
       sasraCategory: s.sasra_license_category,
       sasraVerified: !!s.sasra_verified_at,
     }));
-
     return [...community, ...saccoList];
   }, [myGroups, mySaccos]);
 
-  const filteredMyGroups = useMemo(() => {
-    if (!searchText.trim()) return unifiedGroups;
-    const q = searchText.toLowerCase();
-    return unifiedGroups.filter(
-      (g) =>
-        g.name.toLowerCase().includes(q) ||
-        (g.description ?? "").toLowerCase().includes(q)
-    );
-  }, [unifiedGroups, searchText]);
+  const q = searchText.trim().toLowerCase();
 
-  const filteredInvites = useMemo(() => {
-    if (!searchText.trim()) return pendingInvites;
-    const q = searchText.toLowerCase();
-    return pendingInvites.filter((inv) =>
-      inv.group_name.toLowerCase().includes(q)
-    );
-  }, [pendingInvites, searchText]);
-
-  const filteredDiscover = useMemo(() => {
-    if (!searchText.trim()) return discoverableGroups;
-    const q = searchText.toLowerCase();
-    return discoverableGroups.filter(
-      (g) =>
-        g.group_name.toLowerCase().includes(q) ||
-        (g.group_description ?? "").toLowerCase().includes(q)
-    );
-  }, [discoverableGroups, searchText]);
-
-  const hasNoResults =
-    filteredMyGroups.length === 0 &&
-    filteredInvites.length === 0 &&
-    filteredDiscover.length === 0 &&
-    !myGroupsLoading &&
-    !invitesLoading &&
-    !discoverLoading;
+  const filteredMyGroups = useMemo(
+    () => (!q ? unifiedGroups : unifiedGroups.filter((g) => g.name.toLowerCase().includes(q) || (g.description ?? "").toLowerCase().includes(q))),
+    [unifiedGroups, q]
+  );
+  const filteredInvites = useMemo(
+    () => (!q ? pendingInvites : pendingInvites.filter((inv) => inv.group_name.toLowerCase().includes(q))),
+    [pendingInvites, q]
+  );
+  const filteredDiscover = useMemo(
+    () => (!q ? discoverableGroups : discoverableGroups.filter((g) => g.group_name.toLowerCase().includes(q) || (g.group_description ?? "").toLowerCase().includes(q))),
+    [discoverableGroups, q]
+  );
 
   const [showAllMyGroups, setShowAllMyGroups] = useState(false);
-  const displayedMyGroups = showAllMyGroups
-    ? filteredMyGroups
-    : filteredMyGroups.slice(0, 5);
+  const displayedMyGroups = showAllMyGroups ? filteredMyGroups : filteredMyGroups.slice(0, 5);
 
+  /* ── Join modal ── */
   const [joinModalVisible, setJoinModalVisible] = useState(false);
   const [joinTargetGroup, setJoinTargetGroup] = useState<any>(null);
   const [joinMessage, setJoinMessage] = useState("");
@@ -452,39 +490,32 @@ export default function GroupIndexPage() {
       return;
     }
     if (!memberId || !joinTargetGroup) return;
-    const success = await submitRequest(
-      joinTargetGroup.group_id,
-      memberId,
-      joinMessage.trim()
-    );
+    const success = await submitRequest(joinTargetGroup.group_id, memberId, joinMessage.trim());
     if (success) {
+      const name = joinTargetGroup.group_name;
       closeJoinModal();
       refetchDiscover();
       refetchRequests();
-      Alert.alert(
-        "Request Sent",
-        `Your request to join "${joinTargetGroup.group_name}" has been sent.`
-      );
+      Alert.alert("Request Sent", `Your request to join "${name}" has been sent.`);
     }
   };
 
-  const getJoinButtonState = (groupId: string): "ask" | "pending" | "approved" => {
+  const getJoinState = (groupId: string): JoinState => {
     const status = requestMap[groupId];
     if (status === "pending") return "pending";
     if (status === "approved") return "approved";
     return "ask";
   };
 
-  const handleViewGroup = (group: any) => {
+  const handleViewGroup = (group: any) =>
     router.push({
       pathname: "/(tabs)/groups/preview",
       params: { groupId: group.group_id, groupName: group.group_name },
     });
-  };
 
-  const first_name = memberData?.first_name ?? "there";
+  const openGroup = (group: UnifiedGroup) => navigateToGroup(router, group, memberId);
 
-  /* ── Discover carousel ───────────────────────────────────── */
+  /* ── Discover carousel ── */
   const scrollX = useSharedValue(0);
   const [activeDiscoverIndex, setActiveDiscoverIndex] = useState(0);
 
@@ -497,660 +528,253 @@ export default function GroupIndexPage() {
   useAnimatedReaction(
     () => Math.round(scrollX.value / DISCOVER_INTERVAL),
     (current, previous) => {
-      if (current !== previous && current >= 0) {
-        runOnJS(setActiveDiscoverIndex)(current);
-      }
+      if (current !== previous && current >= 0) runOnJS(setActiveDiscoverIndex)(current);
     }
   );
 
-  /* ── Discover carousel card ─────────────────────────────── */
-  const DiscoverCarouselCard = ({
-    group,
-    index,
-  }: {
-    group: any;
-    index: number;
-  }) => {
-    const animatedStyle = useAnimatedStyle(() => {
-      const inputRange = [
-        (index - 1) * DISCOVER_INTERVAL,
-        index * DISCOVER_INTERVAL,
-        (index + 1) * DISCOVER_INTERVAL,
-      ];
-      const scale = interpolate(scrollX.value, inputRange, [0.94, 1, 0.94], Extrapolation.CLAMP);
-      const opacity = interpolate(scrollX.value, inputRange, [0.72, 1, 0.72], Extrapolation.CLAMP);
-      const translateY = interpolate(scrollX.value, inputRange, [6, 0, 6], Extrapolation.CLAMP);
-      return { transform: [{ scale }, { translateY }], opacity };
-    });
-
-    const buttonState = getJoinButtonState(group.group_id);
-    const isSubmittingThis = submitting === group.group_id;
-
-    const buttonConfig = {
-      ask: {
-        label: "Ask to join",
-        bg: ACCENT.navy,
-        text: "#fff",
-        disabled: false,
-      },
-      pending: {
-        label: "Request sent",
-        bg: ACCENT.amberSoft,
-        text: ACCENT.amber,
-        disabled: true,
-      },
-      approved: {
-        label: "Invite pending",
-        bg: ACCENT.greenSoft,
-        text: ACCENT.green,
-        disabled: true,
-      },
-    }[buttonState];
-
-    return (
-      <Animated.View style={[{ width: DISCOVER_CARD_WIDTH }, animatedStyle]}>
-        <Clay radius={22} depth={2} bodyStyle={styles.discoverCard}>
-          <View style={{ alignItems: "center", gap: 10 }}>
-            <GroupAvatar name={group.group_name} seed={group.group_id} size={56} />
-            <Text numberOfLines={1} style={styles.discoverName}>
-              {group.group_name}
-            </Text>
-            <View style={styles.discoverMetaRow}>
-              <Users size={11} color={CLAY.inkSoft} strokeWidth={2.4} />
-              <Text style={styles.discoverMeta}>
-                {group.member_count} member{group.member_count !== 1 ? "s" : ""}
-              </Text>
-            </View>
-          </View>
-
-          {group.group_description ? (
-            <Text numberOfLines={2} style={styles.discoverBody}>
-              {group.group_description}
-            </Text>
-          ) : null}
-
-          <View style={styles.discoverActions}>
-            <TouchableOpacity
-              onPress={() => handleViewGroup(group)}
-              activeOpacity={0.85}
-              style={styles.discoverGhostBtn}
-            >
-              <Eye size={12} color={CLAY.ink} strokeWidth={2.4} />
-              <Text style={styles.discoverGhostText}>View</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => !buttonConfig.disabled && openJoinModal(group)}
-              disabled={buttonConfig.disabled || isSubmittingThis}
-              activeOpacity={0.9}
-              style={{ flex: 1 }}
-            >
-              <View
-                style={[
-                  styles.discoverPrimaryBtn,
-                  {
-                    backgroundColor: buttonConfig.bg,
-                    opacity: buttonConfig.disabled || isSubmittingThis ? 0.85 : 1,
-                  },
-                ]}
-              >
-                {isSubmittingThis ? (
-                  <ActivityIndicator size="small" color={buttonConfig.text} />
-                ) : (
-                  <>
-                    {buttonState === "ask" && (
-                      <Send size={11} color={buttonConfig.text} strokeWidth={2.4} />
-                    )}
-                    {buttonState === "approved" && (
-                      <Check size={11} color={buttonConfig.text} strokeWidth={2.6} />
-                    )}
-                    {buttonState === "pending" && (
-                      <Clock size={11} color={buttonConfig.text} strokeWidth={2.4} />
-                    )}
-                    <Text
-                      style={[
-                        styles.discoverPrimaryText,
-                        { color: buttonConfig.text },
-                      ]}
-                    >
-                      {buttonConfig.label}
-                    </Text>
-                  </>
-                )}
-              </View>
-            </TouchableOpacity>
-          </View>
-        </Clay>
-      </Animated.View>
-    );
-  };
-
-  /* ── Section header ─────────────────────────────────────── */
-  const SectionHeader = ({
-    title,
-    count,
-    accent = ACCENT.navy,
-    trailing,
-    hint,
-  }: {
-    title: string;
-    count?: number;
-    accent?: string;
-    trailing?: ReactNode;
-    hint?: string;
-  }) => (
-    <View style={styles.sectionHeader}>
-      <View style={styles.sectionHeaderRow}>
-        <View style={styles.sectionTitleRow}>
-          <View style={styles.sectionMarker} />
-          <Text style={styles.sectionTitle}>{title}</Text>
-          {count !== undefined && count > 0 && (
-            <View style={[styles.sectionCount, { backgroundColor: `${accent}22` }]}>
-              <Text style={[styles.sectionCountText, { color: accent }]}>{count}</Text>
-            </View>
-          )}
-        </View>
-        {trailing}
-      </View>
-      {hint ? <Text style={styles.sectionHint}>{hint}</Text> : null}
-    </View>
-  );
-
-  /* ── My Group card — handles both community + SACCO ────── */
-  const renderMyGroupCard = (group: UnifiedGroup) => {
-    const isSacco = group.kind === "sacco";
-
-    const onPress = () =>
-      router.push({
-        pathname: isSacco
-          ? "/(tabs)/groups/sacco/home"
-          : "/(tabs)/groups/group",
-        params: isSacco
-          ? { sacco_id: group.id, group_member_id: memberId }
-          : { group_id: group.id },
-      });
-
-    return (
-      <TouchableOpacity
-        key={`${group.kind}-${group.id}`}
-        onPress={onPress}
-        activeOpacity={0.9}
-        style={styles.listItemWrap}
-      >
-        <Clay bodyStyle={styles.groupCard}>
-          <GroupAvatar name={group.name} seed={group.id} size={48} />
-
-          <View style={{ flex: 1, gap: 3 }}>
-            <View style={styles.groupNameRow}>
-              <Text numberOfLines={1} style={styles.groupName}>
-                {group.name}
-              </Text>
-              {isSacco && group.sasraCategory ? (
-                <SaccoBadge
-                  category={group.sasraCategory}
-                  verified={group.sasraVerified}
-                  size="sm"
-                />
-              ) : null}
-            </View>
-
-            <View style={styles.groupMetaRow}>
-              <Users size={11} color={CLAY.inkSoft} strokeWidth={2.4} />
-              <Text style={styles.groupMeta}>
-                {group.memberCount} member{group.memberCount !== 1 ? "s" : ""}
-              </Text>
-              {group.unreadCount > 0 && (
-                <>
-                  <View style={styles.groupMetaDot} />
-                  <View style={styles.groupUnreadRow}>
-                    <View style={styles.groupUnreadDot} />
-                    <Text style={styles.groupUnreadText}>
-                      {group.unreadCount} new
-                    </Text>
-                  </View>
-                </>
-              )}
-            </View>
-          </View>
-
-          <ChevronRight size={16} color={CLAY.inkFaint} strokeWidth={2.4} />
-        </Clay>
-      </TouchableOpacity>
-    );
-  };
-
-  /* ── Invite card ────────────────────────────────────────── */
-  const renderInviteCard = (invite: any) => (
-    <View key={invite.invitation_id} style={styles.listItemWrap}>
-      <Clay bodyStyle={styles.inviteCard}>
-        <View style={styles.inviteTop}>
-          <GroupAvatar
-            name={invite.group_name}
-            seed={invite.group_id ?? invite.invitation_id}
-            size={42}
-          />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text numberOfLines={1} style={styles.inviteName}>
-              {invite.group_name}
-            </Text>
-            <Text numberOfLines={1} style={styles.inviteMeta}>
-              {invite.inviter_first_name} {invite.inviter_last_name} invited you
-            </Text>
-          </View>
-          <View style={styles.inviteTag}>
-            <Text style={styles.inviteTagText}>INVITE</Text>
-          </View>
-        </View>
-
-        <View style={styles.inviteActions}>
-          <TouchableOpacity
-            onPress={() => declineInvite(invite.invitation_id)}
-            activeOpacity={0.9}
-            style={[styles.inviteBtn, styles.inviteBtnGhost]}
-          >
-            <Text style={styles.inviteBtnGhostText}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => acceptInvite(invite.invitation_id)}
-            activeOpacity={0.9}
-            style={[styles.inviteBtn, { backgroundColor: ACCENT.teal }]}
-          >
-            <Text style={styles.inviteBtnPrimaryText}>Accept</Text>
-          </TouchableOpacity>
-        </View>
-      </Clay>
-    </View>
-  );
-
-  /* ── Empty states ───────────────────────────────────────── */
-  const InvitesEmptyState = () => (
-    <View style={styles.listItemWrap}>
-      <Clay bodyStyle={styles.emptyInlineCard}>
-        <View style={[styles.emptyInlineIcon, { backgroundColor: ACCENT.navySoft }]}>
-          <MailOpen size={18} color={ACCENT.navy} strokeWidth={2.2} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.emptyInlineTitle}>No pending invites</Text>
-          <Text style={styles.emptyInlineBody}>
-            Group invitations from admins will land here
-          </Text>
-        </View>
-      </Clay>
-    </View>
-  );
-
-  const GroupsEmptyState = () => (
-    <View style={styles.listItemWrap}>
-      <Clay bodyStyle={styles.emptyBlockCard}>
-        <View style={[styles.emptyBlockIcon, { backgroundColor: ACCENT.navySoft }]}>
-          <Users size={20} color={ACCENT.navy} strokeWidth={2.2} />
-        </View>
-        <Text style={styles.emptyBlockTitle}>You're not in a group yet</Text>
-        <Text style={styles.emptyBlockBody}>
-          Tap + to create your first group or SACCO, or discover one below
-        </Text>
-      </Clay>
-    </View>
-  );
-
-  /* ── Discover swipe hint ────────────────────────────────── */
-  const DiscoverSwipeHint = ({
-    total,
-    activeIndex,
-  }: {
-    total: number;
-    activeIndex: number;
-  }) => {
-    if (total <= 1) return null;
-    const canGoLeft = activeIndex > 0;
-    const canGoRight = activeIndex < total - 1;
-
-    return (
-      <View style={styles.swipeHint}>
-        <ChevronLeft
-          size={16}
-          color={canGoLeft ? ACCENT.navy : CLAY.inkFaint}
-          strokeWidth={2.4}
-          style={{ opacity: canGoLeft ? 1 : 0.35 }}
-        />
-        <View style={styles.dotsRow}>
-          {Array.from({ length: total }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                {
-                  width: i === activeIndex ? 16 : 6,
-                  backgroundColor:
-                    i === activeIndex ? ACCENT.navy : CLAY.inkFaint,
-                  opacity: i === activeIndex ? 1 : 0.4,
-                },
-              ]}
-            />
-          ))}
-        </View>
-        <ChevronRight
-          size={16}
-          color={canGoRight ? ACCENT.navy : CLAY.inkFaint}
-          strokeWidth={2.4}
-          style={{ opacity: canGoRight ? 1 : 0.35 }}
-        />
-      </View>
-    );
-  };
-
+  /* ── Derived flags ── */
   const loading = myGroupsLoading || invitesLoading || discoverLoading;
   const error = myGroupsError || invitesError || discoverError;
-  const isFirstTimeEmpty =
-    !loading &&
-    !error &&
-    unifiedGroups.length === 0 &&
-    pendingInvites.length === 0 &&
-    discoverableGroups.length === 0;
+  const hasAnyData = unifiedGroups.length > 0 || pendingInvites.length > 0 || discoverableGroups.length > 0;
+  const isFirstTimeEmpty = !loading && !error && !hasAnyData;
+  const showSections = !isFirstTimeEmpty && !(error && !hasAnyData);
+  const hasNoResults =
+    !loading && filteredMyGroups.length === 0 && filteredInvites.length === 0 && filteredDiscover.length === 0;
 
-  const discoverSidePadding = (SCREEN_WIDTH - DISCOVER_CARD_WIDTH) / 2;
 
   return (
-    <SafeAreaView style={styles.root}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: tabBarInset + SPACING.lg },
-        ]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading}
-            onRefresh={refetchAll}
-            tintColor={ACCENT.navy}
-            colors={[ACCENT.navy]}
-          />
-        }
-      >
-        {/* ── Greeting block with notification ───────────── */}
-        <View style={styles.greetingBlock}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greetingEyebrow}>WELCOME BACK</Text>
-            <Text style={styles.greetingName}>{first_name}</Text>
-          </View>
+    <View style={styles.root}>
+      <LinearGradient colors={["#E8F5E9", "#F5F7FA"]} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0.5 }} style={StyleSheet.absoluteFillObject} />
 
-          <TouchableOpacity
-            onPress={openMessages}
-            activeOpacity={0.9}
-            accessibilityRole="button"
-            accessibilityLabel="Join request messages"
-          >
-            <Clay radius={18} depth={1} bodyStyle={styles.bellBody}>
-              <BellIcon size={20} color={CLAY.ink} strokeWidth={2.4} />
+      <SafeAreaView style={styles.safe} edges={["top"]}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{ paddingBottom: tabBarInset + 110 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={ACCENT.green} colors={[ACCENT.green]} />}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Groups</Text>
+            <TouchableOpacity
+              onPress={openMessages}
+              style={styles.bellWrap}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Join request messages"
+            >
+              <BellIcon size={24} color={CLAY.ink} strokeWidth={2} />
               {messagesBadgeCount > 0 ? (
                 <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>
-                    {messagesBadgeCount > 9 ? "9+" : messagesBadgeCount}
-                  </Text>
+                  <Text style={styles.bellBadgeText}>{messagesBadgeCount > 9 ? "9+" : messagesBadgeCount}</Text>
                 </View>
               ) : null}
-            </Clay>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Stats strip ────────────────────────────────── */}
-        <View style={styles.statsRow}>
-          {[
-            { value: unifiedGroups.length, label: "Groups", accent: ACCENT.navy },
-            {
-              value: pendingInvites.length,
-              label: "Invites",
-              accent: pendingInvites.length > 0 ? ACCENT.teal : CLAY.inkSoft,
-            },
-            {
-              value: discoverableGroups.length,
-              label: "Discover",
-              accent: ACCENT.purple,
-            },
-          ].map((stat) => (
-            <Clay
-              key={stat.label}
-              radius={RADIUS.lg}
-              depth={1}
-              style={{ flex: 1 }}
-              bodyStyle={styles.statCard}
-            >
-              <Text style={[styles.statValue, { color: stat.accent }]}>
-                {stat.value}
-              </Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-            </Clay>
-          ))}
-        </View>
-
-        {/* ── Search ─────────────────────────────────────── */}
-        <Clay
-          inset
-          radius={RADIUS.md}
-          color={CLAY.sunken}
-          style={styles.searchShell}
-          bodyStyle={styles.searchBody}
-        >
-          <Search size={16} color={CLAY.inkSoft} strokeWidth={2.4} />
-          <TextInput
-            placeholder="Find a group or SACCO..."
-            placeholderTextColor={CLAY.inkFaint}
-            style={styles.searchInput}
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          {searchText.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchText("")}
-              hitSlop={8}
-              style={styles.searchClear}
-            >
-              <X size={16} color={CLAY.inkSoft} strokeWidth={2.4} />
             </TouchableOpacity>
+          </View>
+
+          {/* Summary — open on the canvas */}
+          <View style={styles.statsRow}>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{unifiedGroups.length}</Text>
+              <Text style={styles.statLabel}>Groups</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={[styles.statValue, pendingInvites.length > 0 && styles.statValueHighlight]}>{pendingInvites.length}</Text>
+              <Text style={styles.statLabel}>Invites</Text>
+            </View>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{discoverableGroups.length}</Text>
+              <Text style={styles.statLabel}>Discover</Text>
+            </View>
+          </View>
+
+          {/* Search */}
+          <View style={styles.searchWrap}>
+            <Search size={18} color={CLAY.inkSoft} strokeWidth={2.2} />
+            <TextInput
+              placeholder="Find a group or SACCO..."
+              placeholderTextColor={CLAY.inkFaint}
+              style={styles.searchInput}
+              value={searchText}
+              onChangeText={setSearchText}
+              returnKeyType="search"
+            />
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchText("")} hitSlop={10}>
+                <X size={18} color={CLAY.inkSoft} strokeWidth={2.2} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Error — only blocks the screen when there is nothing to show */}
+          {!loading && error && (
+            <View style={styles.errorBlock}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={handleRefresh} activeOpacity={0.85} style={styles.errorRetry}>
+                <Text style={styles.errorRetryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           )}
-        </Clay>
 
-        {/* ── Error ──────────────────────────────────────── */}
-        {!loading && error && (
-          <View style={styles.errorBlock}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              onPress={refetchAll}
-              activeOpacity={0.9}
-              style={styles.errorRetry}
-            >
-              <Text style={styles.errorRetryText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          {isFirstTimeEmpty && (
+            <EmptyState
+              icon={Inbox}
+              title="No groups yet"
+              description="Create a community group or SACCO, or discover existing groups to start saving together."
+              accentColor={ACCENT.green}
+              action={{ label: "Create a group", onPress: () => router.push("/(tabs)/groups/create/picker") }}
+            />
+          )}
 
-        {/* ── First-time empty ──────────────────────────── */}
-        {isFirstTimeEmpty && (
-          <EmptyState
-            icon={Inbox}
-            title="No groups yet"
-            description="Create a community group or SACCO, or discover existing groups to start saving together."
-            accentColor={ACCENT.navy}
-            action={{
-              label: "Create a group",
-              onPress: () => router.push("/(tabs)/groups/create/picker"),
-            }}
-          />
-        )}
-
-        {/* ── Search no results ─────────────────────────── */}
-        {!loading && !error && !isFirstTimeEmpty && hasNoResults && (
-          <View style={styles.noResults}>
-            <Text style={styles.noResultsText}>
-              Nothing matches "{searchText}"
-            </Text>
-          </View>
-        )}
-
-        {/* ── Sections ──────────────────────────────────── */}
-        {!error && !isFirstTimeEmpty && (
-          <>
-            {/* Invites */}
-            <View style={{ marginTop: SPACING.xl }}>
-              <SectionHeader
-                title="Invites"
-                count={filteredInvites.length}
-                accent={ACCENT.teal}
-              />
-              {invitesLoading && pendingInvites.length === 0 ? (
-                <>
-                  <SkeletonCard height={96} />
-                  <SkeletonCard height={96} />
-                </>
-              ) : filteredInvites.length > 0 ? (
-                filteredInvites.map(renderInviteCard)
-              ) : (
-                <InvitesEmptyState />
-              )}
+          {showSections && !loading && hasNoResults && q.length > 0 && (
+            <View style={styles.noResults}>
+              <Text style={styles.noResultsText}>Nothing matches "{searchText}"</Text>
             </View>
+          )}
 
-            <View style={styles.divider} />
+          {showSections && (
+            <>
+              {/* Invites */}
+              <View style={styles.section}>
+                <SectionHeader title="Invites" count={filteredInvites.length} accent={ACCENT.green} />
+                {invitesLoading && pendingInvites.length === 0 ? (
+                  <SkeletonCard height={96} />
+                ) : (
+                  <View style={styles.sectionBody}>
+                    {filteredInvites.length > 0 ? (
+                      filteredInvites.map((invite: any) => (
+                        <InviteTile
+                          key={invite.invitation_id}
+                          invite={invite}
+                          onAccept={() => acceptInvite(invite.invitation_id)}
+                          onDecline={() => declineInvite(invite.invitation_id)}
+                        />
+                      ))
+                    ) : (
+                      <InvitesEmptyState />
+                    )}
+                  </View>
+                )}
+              </View>
 
-            {/* My Groups */}
-            <View style={{ marginTop: SPACING.lg }}>
-              <SectionHeader
-                title="My groups"
-                count={filteredMyGroups.length}
-                trailing={
-                  filteredMyGroups.length > 5 ? (
-                    <TouchableOpacity
-                      onPress={() => setShowAllMyGroups((v) => !v)}
-                      hitSlop={8}
-                    >
-                      <Text style={styles.sectionLink}>
-                        {showAllMyGroups ? "Show less" : "View all"}
+              {/* My groups */}
+              <View style={styles.section}>
+                <SectionHeader
+                  title="My groups"
+                  count={filteredMyGroups.length}
+                  trailing={
+                    filteredMyGroups.length > 5 ? (
+                      <TouchableOpacity onPress={() => setShowAllMyGroups((v) => !v)} hitSlop={8}>
+                        <Text style={styles.sectionLink}>{showAllMyGroups ? "Show less" : "View all"}</Text>
+                      </TouchableOpacity>
+                    ) : null
+                  }
+                />
+                {myGroupsLoading && unifiedGroups.length === 0 ? (
+                  <>
+                    <SkeletonCard height={78} />
+                    <SkeletonCard height={78} />
+                    <SkeletonCard height={78} />
+                  </>
+                ) : filteredMyGroups.length > 0 ? (
+                  <View style={styles.sectionBody}>
+                    {displayedMyGroups.map((g) => (
+                      <GroupRow key={`${g.kind}-${g.id}`} group={g} onPress={() => openGroup(g)} />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.sectionBody}>
+                    <View style={styles.emptyBlock}>
+                      <View style={styles.emptyIcon}>
+                        <Users size={22} color={ACCENT.green} strokeWidth={2.2} />
+                      </View>
+                      <Text style={styles.emptyTitle}>You're not in a group yet</Text>
+                      <Text style={styles.emptyBody}>
+                        Tap + to create your first group or SACCO, or discover one below
                       </Text>
-                    </TouchableOpacity>
-                  ) : null
-                }
-              />
-              {myGroupsLoading && unifiedGroups.length === 0 ? (
-                <>
-                  <SkeletonCard height={78} />
-                  <SkeletonCard height={78} />
-                  <SkeletonCard height={78} />
-                </>
-              ) : filteredMyGroups.length > 0 ? (
-                displayedMyGroups.map(renderMyGroupCard)
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Discover */}
+              {discoverLoading && discoverableGroups.length === 0 ? (
+                <View style={styles.section}>
+                  <SectionHeader title="Discover" hint="Fresh groups you might fit into" />
+                  <SkeletonCard height={190} rounded={RADIUS.lg} marginHorizontal={DISCOVER_SIDE_PADDING} />
+                </View>
+              ) : filteredDiscover.length > 0 ? (
+                <View style={styles.section}>
+                  <SectionHeader title="Discover" count={filteredDiscover.length} accent={ACCENT.navy} hint="Groups near you looking for members" />
+                  <Animated.ScrollView
+                    horizontal
+                    onScroll={scrollHandler}
+                    scrollEventThrottle={16}
+                    snapToInterval={DISCOVER_INTERVAL}
+                    decelerationRate="fast"
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.discoverScroll}
+                  >
+                    {filteredDiscover.map((group, index) => (
+                      <DiscoverTile
+                        key={group.group_id}
+                        group={group}
+                        index={index}
+                        scrollX={scrollX}
+                        state={getJoinState(group.group_id)}
+                        submitting={submitting === group.group_id}
+                        onView={() => handleViewGroup(group)}
+                        onAsk={() => openJoinModal(group)}
+                      />
+                    ))}
+                  </Animated.ScrollView>
+                  <DiscoverSwipeHint total={filteredDiscover.length} activeIndex={activeDiscoverIndex} />
+                </View>
               ) : (
-                <GroupsEmptyState />
+                <View style={styles.section}>
+                  <SectionHeader title="Discover" accent={ACCENT.navy} hint="Groups near you looking for members" />
+                  <DiscoverEmptyState
+                    searching={q.length > 0 && discoverableGroups.length > 0}
+                    failed={!!discoverError && discoverableGroups.length === 0}
+                    onRetry={handleRefresh}
+                  />
+                </View>
               )}
-            </View>
+            </>
+          )}
+        </ScrollView>
+      </SafeAreaView>
 
-            <View style={styles.divider} />
-
-            {/* Discover */}
-            {discoverLoading && discoverableGroups.length === 0 ? (
-              <View style={{ marginTop: SPACING.lg }}>
-                <SectionHeader
-                  title="Discover"
-                  hint="Fresh groups you might fit into"
-                />
-                <SkeletonCard
-                  height={240}
-                  rounded={22}
-                  marginHorizontal={discoverSidePadding}
-                />
-              </View>
-            ) : filteredDiscover.length > 0 ? (
-              <View style={{ marginTop: SPACING.lg, paddingBottom: SPACING.sm }}>
-                <SectionHeader
-                  title="Discover"
-                  count={filteredDiscover.length}
-                  accent={ACCENT.purple}
-                  hint="Groups near you looking for members"
-                />
-
-                <Animated.ScrollView
-                  horizontal
-                  onScroll={scrollHandler}
-                  scrollEventThrottle={16}
-                  snapToInterval={DISCOVER_INTERVAL}
-                  decelerationRate="fast"
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{
-                    paddingHorizontal: discoverSidePadding,
-                    gap: DISCOVER_CARD_GAP,
-                    paddingVertical: 10,
-                  }}
-                >
-                  {filteredDiscover.map((group, index) => (
-                    <DiscoverCarouselCard
-                      key={group.group_id}
-                      group={group}
-                      index={index}
-                    />
-                  ))}
-                </Animated.ScrollView>
-
-                <DiscoverSwipeHint
-                  total={filteredDiscover.length}
-                  activeIndex={activeDiscoverIndex}
-                />
-              </View>
-            ) : null}
-          </>
-        )}
-      </ScrollView>
-
-      {/* ── FAB — lifted above the tab bar ─────────────────── */}
+      {/* FAB */}
       <TouchableOpacity
         onPress={() => router.push("/(tabs)/groups/create/picker")}
-        activeOpacity={0.9}
-        style={[styles.fab, { bottom: tabBarInset + 8 }]}
+        activeOpacity={0.85}
+        style={[styles.fab, { bottom: tabBarInset + SPACING.md }]}
+        accessibilityRole="button"
+        accessibilityLabel="Create a group"
       >
-        <Clay
-          color={ACCENT.navy}
-          radius={29}
-          depth={2}
-          highlight="rgba(255,255,255,0.32)"
-          shade="rgba(15, 30, 60, 0.44)"
-          bodyStyle={styles.fabBody}
-        >
-          <Plus size={26} color="#fff" strokeWidth={2.6} />
-        </Clay>
+        <Plus size={26} color="#fff" strokeWidth={2.6} />
       </TouchableOpacity>
 
-      {/* ── Ask to Join Modal ──────────────────────────────── */}
-      <Modal
-        visible={joinModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={closeJoinModal}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-        >
-          <TouchableOpacity
-            style={styles.modalBackdrop}
-            activeOpacity={1}
-            onPress={closeJoinModal}
-          />
+      {/* Ask to join */}
+      <Modal visible={joinModalVisible} animationType="slide" transparent onRequestClose={closeJoinModal}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeJoinModal} />
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
-
             <View style={styles.modalHeader}>
-              <View style={{ flex: 1, marginRight: 12 }}>
+              <View style={styles.modalHeaderText}>
                 <Text style={styles.modalTitle}>Ask to join</Text>
-                <Text style={styles.modalSubtitle} numberOfLines={1}>
-                  {joinTargetGroup?.group_name}
-                </Text>
+                <Text style={styles.modalSubtitle} numberOfLines={1}>{joinTargetGroup?.group_name}</Text>
               </View>
               <TouchableOpacity onPress={closeJoinModal} hitSlop={8}>
-                <X size={22} color={CLAY.ink} strokeWidth={2.4} />
+                <X size={24} color={CLAY.ink} strokeWidth={2.2} />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.modalBody}>
-              Introduce yourself to the group admin. Let them know why you'd
-              like to join.
+              Introduce yourself to the group admin. Let them know why you'd like to join.
             </Text>
 
             <TextInput
@@ -1163,220 +787,118 @@ export default function GroupIndexPage() {
                 setJoinMessage(text);
                 setJoinMessageError("");
               }}
-              style={[
-                styles.joinInput,
-                joinMessageError ? { borderColor: ACCENT.red } : null,
-              ]}
+              style={[styles.joinInput, !!joinMessageError && styles.joinInputInvalid]}
               autoFocus
               maxLength={500}
             />
 
             <View style={styles.joinInputFooter}>
-              {joinMessageError ? (
-                <Text style={styles.joinInputError}>{joinMessageError}</Text>
-              ) : (
-                <View />
-              )}
-              <Text style={styles.joinInputCount}>
-                {joinMessage.length}/500
-              </Text>
+              {joinMessageError ? <Text style={styles.joinErrorText}>{joinMessageError}</Text> : <View />}
+              <Text style={styles.joinInputCount}>{joinMessage.length}/500</Text>
             </View>
 
             <TouchableOpacity
               onPress={handleSubmitJoinRequest}
               disabled={submitting === joinTargetGroup?.group_id}
-              activeOpacity={0.9}
+              activeOpacity={0.85}
+              style={[styles.joinSubmit, submitting === joinTargetGroup?.group_id && styles.joinSubmitBusy]}
             >
-              <Clay
-                color={ACCENT.navy}
-                radius={RADIUS.lg}
-                depth={1}
-                highlight="rgba(255,255,255,0.32)"
-                shade="rgba(15, 30, 60, 0.44)"
-                bodyStyle={[
-                  styles.joinSubmit,
-                  submitting === joinTargetGroup?.group_id && { opacity: 0.75 },
-                ]}
-              >
-                {submitting === joinTargetGroup?.group_id ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Send size={18} color="#fff" strokeWidth={2.4} />
-                )}
-                <Text style={styles.joinSubmitText}>
-                  {submitting === joinTargetGroup?.group_id
-                    ? "Sending..."
-                    : "Send request"}
-                </Text>
-              </Clay>
+              {submitting === joinTargetGroup?.group_id ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Send size={18} color="#fff" strokeWidth={2.4} />
+              )}
+              <Text style={styles.joinSubmitText}>
+                {submitting === joinTargetGroup?.group_id ? "Sending..." : "Send request"}
+              </Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Messages Modal ─────────────────────────────────── */}
-      <Modal
-        visible={messagesModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setMessagesModalVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setMessagesModalVisible(false)}
-        />
-        <View style={[styles.modalSheet, { maxHeight: "80%" }]}>
+      {/* Messages */}
+      <Modal visible={messagesModalVisible} animationType="slide" transparent onRequestClose={() => setMessagesModalVisible(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setMessagesModalVisible(false)} />
+        <View style={[styles.modalSheet, styles.messagesSheet]}>
           <View style={styles.modalHandle} />
-
           <View style={styles.modalHeader}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Bell size={20} color={ACCENT.navy} strokeWidth={2.4} />
+            <View style={styles.modalTitleRow}>
+              <Bell size={20} color={ACCENT.green} strokeWidth={2.2} />
               <Text style={styles.modalTitle}>My join requests</Text>
             </View>
-            <TouchableOpacity
-              onPress={() => setMessagesModalVisible(false)}
-              hitSlop={8}
-            >
-              <X size={22} color={CLAY.ink} strokeWidth={2.4} />
+            <TouchableOpacity onPress={() => setMessagesModalVisible(false)} hitSlop={8}>
+              <X size={24} color={CLAY.ink} strokeWidth={2.2} />
             </TouchableOpacity>
           </View>
 
           {messagesLoading ? (
             <View style={styles.messageState}>
-              <ActivityIndicator size="large" color={ACCENT.navy} />
+              <ActivityIndicator size="large" color={ACCENT.green} />
               <Text style={styles.messageStateText}>Loading...</Text>
             </View>
           ) : messagesError ? (
             <View style={styles.messageState}>
-              <Text style={[styles.messageStateText, { color: ACCENT.red }]}>
-                {messagesError}
-              </Text>
+              <Text style={[styles.messageStateText, styles.messageStateError]}>{messagesError}</Text>
             </View>
           ) : messages.length === 0 ? (
             <View style={styles.messageState}>
-              <View style={[styles.messageEmptyIcon, { backgroundColor: ACCENT.navySoft }]}>
-                <MessageSquare size={28} color={ACCENT.navy} strokeWidth={2.2} />
+              <View style={styles.emptyIcon}>
+                <MessageSquare size={26} color={ACCENT.green} strokeWidth={2.2} />
               </View>
-              <Text style={styles.messageEmptyTitle}>No messages yet</Text>
-              <Text style={styles.messageEmptyBody}>
-                Responses to your join requests will appear here once an
-                admin reviews them.
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptyBody}>
+                Responses to your join requests will appear here once an admin reviews them.
               </Text>
             </View>
           ) : (
-            <ScrollView
-              contentContainerStyle={{ padding: SPACING.lg, gap: SPACING.md }}
-              showsVerticalScrollIndicator={false}
-            >
+            <ScrollView contentContainerStyle={styles.messageList} showsVerticalScrollIndicator={false}>
               {messages.map((msg) => {
                 const isPending = msg.request_status === "pending";
                 const isApproved = msg.request_status === "approved";
                 const isRejected = msg.request_status === "rejected";
 
-                const accent = isApproved
-                  ? ACCENT.green
-                  : isRejected
-                  ? ACCENT.red
-                  : ACCENT.amber;
-                const accentSoft = isApproved
-                  ? ACCENT.greenSoft
-                  : isRejected
-                  ? ACCENT.redSoft
-                  : ACCENT.amberSoft;
-                const StatusIcon = isApproved
-                  ? CheckCircle
-                  : isRejected
-                  ? XCircle
-                  : Clock;
-                const label = isApproved
-                  ? "Request approved"
-                  : isRejected
-                  ? "Request rejected"
-                  : "Request pending";
+                const StatusIcon = isApproved ? CheckCircle : isRejected ? XCircle : Clock;
+                const statusColor = isApproved ? ACCENT.green : isRejected ? ACCENT.red : ACCENT.amber;
+                const statusWrap = isApproved ? styles.statusApproved : isRejected ? styles.statusRejected : styles.statusPending;
+                const label = isApproved ? "Request approved" : isRejected ? "Request rejected" : "Request pending";
 
                 return (
-                  <View key={msg.request_id} style={styles.messageCardWrap}>
-                    <Clay bodyStyle={styles.messageCard}>
-                      <View style={styles.messageTop}>
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                          <View style={styles.messageGroupRow}>
-                            <Users size={14} color={CLAY.inkSoft} strokeWidth={2.4} />
-                            <Text style={styles.messageGroupName}>
-                              {msg.group_name}
-                            </Text>
-                          </View>
-                          <Text style={styles.messageLabel}>{label}</Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.messageStatusIcon,
-                            { backgroundColor: accentSoft },
-                          ]}
-                        >
-                          <StatusIcon size={20} color={accent} strokeWidth={2.4} />
-                        </View>
+                  <View key={msg.request_id} style={styles.messageItem}>
+                    <View style={styles.messageTop}>
+                      <View style={[styles.statusIcon, statusWrap]}>
+                        <StatusIcon size={20} color={statusColor} strokeWidth={2.2} />
                       </View>
+                      <View style={styles.messageTitleWrap}>
+                        <Text style={styles.messageLabel}>{label}</Text>
+                        <Text style={styles.messageGroupName}>{msg.group_name}</Text>
+                      </View>
+                    </View>
 
-                      {msg.admin_message ? (
-                        <View
-                          style={[
-                            styles.messageAdminNote,
-                            { borderLeftColor: accent },
-                          ]}
-                        >
-                          <Text style={styles.messageAdminLabel}>
-                            MESSAGE FROM ADMIN
-                          </Text>
-                          <Text style={styles.messageAdminBody}>
-                            {msg.admin_message}
-                          </Text>
-                        </View>
-                      ) : null}
+                    {msg.admin_message ? (
+                      <View style={styles.messageAdminNote}>
+                        <Text style={styles.messageAdminLabel}>Message from admin</Text>
+                        <Text style={styles.messageAdminBody}>{msg.admin_message}</Text>
+                      </View>
+                    ) : null}
 
-                      {isPending && (
-                        <View
-                          style={[
-                            styles.messageInlineNote,
-                            { backgroundColor: ACCENT.amberSoft },
-                          ]}
-                        >
-                          <Clock size={14} color={ACCENT.amber} strokeWidth={2.4} />
-                          <Text
-                            style={[
-                              styles.messageInlineText,
-                              { color: ACCENT.amber },
-                            ]}
-                          >
-                            Awaiting review by the group admin.
-                          </Text>
-                        </View>
-                      )}
-                      {isApproved && (
-                        <View
-                          style={[
-                            styles.messageInlineNote,
-                            { backgroundColor: ACCENT.greenSoft },
-                          ]}
-                        >
-                          <Bell size={14} color={ACCENT.green} strokeWidth={2.4} />
-                          <Text
-                            style={[
-                              styles.messageInlineText,
-                              { color: ACCENT.green },
-                            ]}
-                          >
-                            Check your Invites section to join the group.
-                          </Text>
-                        </View>
-                      )}
+                    {isPending && (
+                      <View style={[styles.messageInlineNote, styles.noteAmber]}>
+                        <Clock size={14} color={ACCENT.amber} strokeWidth={2.2} />
+                        <Text style={[styles.messageInlineText, styles.noteAmberText]}>Awaiting review by the group admin.</Text>
+                      </View>
+                    )}
+                    {isApproved && (
+                      <View style={[styles.messageInlineNote, styles.noteGreen]}>
+                        <Bell size={14} color={ACCENT.green} strokeWidth={2.2} />
+                        <Text style={[styles.messageInlineText, styles.noteGreenText]}>Check your Invites section to join the group.</Text>
+                      </View>
+                    )}
 
-                      <Text style={styles.messageTimestamp}>
-                        {msg.reviewed_at
-                          ? `Reviewed ${formatRelativeDate(msg.reviewed_at)}`
-                          : `Submitted ${formatRelativeDate(msg.created_at)}`}
-                      </Text>
-                    </Clay>
+                    <Text style={styles.messageTimestamp}>
+                      {msg.reviewed_at
+                        ? `Reviewed ${formatRelativeDate(msg.reviewed_at)}`
+                        : `Submitted ${formatRelativeDate(msg.created_at)}`}
+                    </Text>
                   </View>
                 );
               })}
@@ -1384,625 +906,167 @@ export default function GroupIndexPage() {
           )}
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                           */
-/* ------------------------------------------------------------------ */
-
-function formatRelativeDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-/* ------------------------------------------------------------------ */
-/*  Styles                                                            */
-/* ------------------------------------------------------------------ */
-
+/* ================================================================== */
+/*  STYLES                                                            */
+/* ================================================================== */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: CLAY.canvas },
-  scrollContent: { paddingBottom: 120 },
+  safe: { flex: 1 },
+  scroll: { flex: 1 },
+  flex: { flex: 1 },
 
-  /* Greeting */
-  greetingBlock: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xl + 8,
-  },
-  greetingEyebrow: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: CLAY.inkFaint,
-    letterSpacing: 1.3,
-  },
-  greetingName: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.8,
-    marginTop: 4,
-  },
+  /* Header */
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg },
+  title: { flex: 1, fontSize: 24, fontWeight: "700", color: CLAY.ink, letterSpacing: -0.5 },
+  bellWrap: { position: "relative", padding: SPACING.sm },
+  bellBadge: { position: "absolute", top: 2, right: 0, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: ACCENT.red, alignItems: "center", justifyContent: "center" },
+  bellBadgeText: { color: "#fff", fontSize: 10, fontWeight: "700", lineHeight: 12 },
 
-  /* Notification bell — clay slab */
-  bellBody: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  bellBadge: {
-    position: "absolute",
-    top: -4,
-    right: -4,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    backgroundColor: ACCENT.red,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: CLAY.surface,
-  },
-  bellBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "800",
-    lineHeight: 12,
-  },
+  /* Summary */
+  statsRow: { flexDirection: "row", paddingHorizontal: SPACING.xl, marginTop: SPACING.xxl, gap: SPACING.xxl },
+  stat: { gap: 2 },
+  statValue: { fontSize: 28, fontWeight: "700", color: CLAY.ink, letterSpacing: -0.8, fontVariant: ["tabular-nums"] },
+  statValueHighlight: { color: ACCENT.green },
+  statLabel: { fontSize: 13, fontWeight: "500", color: CLAY.inkSoft },
 
-  /* Stats */
-  statsRow: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.xl,
-    marginTop: SPACING.lg,
-  },
-  statCard: {
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: RADIUS.lg,
-    alignItems: "center",
-    gap: 4,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.6,
-    fontVariant: ["tabular-nums"],
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: CLAY.inkFaint,
-    letterSpacing: 0.9,
-    textTransform: "uppercase",
-  },
+  /* Search */
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: SPACING.xl, marginTop: SPACING.xl, paddingHorizontal: SPACING.lg, borderRadius: RADIUS.md, backgroundColor: CLAY.surface },
+  searchInput: { flex: 1, color: CLAY.ink, paddingVertical: 14, fontSize: 15, fontWeight: "500" },
 
-  /* Search — recessed clay well */
-  searchShell: {
-    marginHorizontal: SPACING.xl,
-    marginTop: SPACING.lg,
-  },
-  searchBody: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: SPACING.md + 2,
-  },
-  searchInput: {
-    flex: 1,
-    color: CLAY.ink,
-    paddingVertical: 12,
-    fontSize: 14.5,
-    fontWeight: "600",
-  },
-  searchClear: { padding: 2 },
+  /* Error / no results */
+  errorBlock: { padding: SPACING.huge, alignItems: "center", gap: SPACING.md },
+  errorText: { color: ACCENT.red, fontSize: 15, textAlign: "center", fontWeight: "600" },
+  errorRetry: { paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md, borderRadius: RADIUS.md, backgroundColor: ACCENT.green },
+  errorRetryText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  noResults: { padding: SPACING.huge, alignItems: "center" },
+  noResultsText: { color: CLAY.inkSoft, fontSize: 15, fontWeight: "500" },
 
-  /* Errors & no results */
-  errorBlock: { padding: 40, alignItems: "center", gap: 12 },
-  errorText: {
-    color: ACCENT.red,
-    fontSize: 15,
-    textAlign: "center",
-    fontWeight: "600",
-  },
-  errorRetry: {
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderRadius: RADIUS.md,
-    backgroundColor: ACCENT.navy,
-  },
-  errorRetryText: { color: "#fff", fontWeight: "800", fontSize: 13 },
-  noResults: { padding: 40, alignItems: "center" },
-  noResultsText: { color: CLAY.inkSoft, fontSize: 15, fontWeight: "600" },
+  /* Sections */
+  section: { marginTop: SPACING.huge },
+  sectionBody: { paddingHorizontal: SPACING.xl },
+  sectionHeader: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.sm },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm },
+  sectionTitle: { fontSize: 17, fontWeight: "700", color: CLAY.ink, letterSpacing: -0.3 },
+  sectionCountPill: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 3 },
+  sectionCountText: { fontSize: 12, fontWeight: "700" },
+  sectionHint: { fontSize: 13, color: CLAY.inkSoft, marginTop: 2, fontWeight: "500" },
+  sectionLink: { fontSize: 13, fontWeight: "600", color: CLAY.inkSoft },
 
-  /* Section headers */
-  sectionHeader: {
-    paddingHorizontal: SPACING.xl,
-    marginBottom: SPACING.md,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  sectionMarker: {
-    width: 4,
-    height: 16,
-    borderRadius: 2,
-    backgroundColor: CLAY.ink,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.4,
-  },
-  sectionCount: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  sectionCountText: { fontSize: 11, fontWeight: "800" },
-  sectionHint: {
-    fontSize: 12,
-    color: CLAY.inkSoft,
-    marginTop: 4,
-    fontWeight: "500",
-  },
-  sectionLink: {
-    fontWeight: "800",
-    fontSize: 12,
-    color: ACCENT.navy,
-  },
-
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: CLAY.hairline,
-    marginHorizontal: SPACING.xl,
-    marginTop: SPACING.xl,
-  },
-
-  listItemWrap: { paddingHorizontal: SPACING.xl, marginBottom: SPACING.sm },
-
-  /* Invite card */
-  inviteCard: {
-    padding: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    gap: SPACING.md,
-  },
-  inviteTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-  },
-  inviteName: {
-    fontSize: 14.5,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.2,
-  },
-  inviteMeta: {
-    fontSize: 11.5,
-    color: CLAY.inkSoft,
-    fontWeight: "500",
-  },
-  inviteTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: ACCENT.tealSoft,
-  },
-  inviteTagText: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    color: ACCENT.teal,
-  },
-  inviteActions: { flexDirection: "row", gap: SPACING.sm },
-  inviteBtn: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  inviteBtnGhost: { backgroundColor: CLAY.sunken },
-  inviteBtnGhostText: {
-    color: CLAY.ink,
-    fontWeight: "700",
-    fontSize: 12.5,
-  },
-  inviteBtnPrimaryText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 12.5,
-  },
-
-  /* Group card */
-  groupCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    padding: SPACING.md + 2,
-    borderRadius: RADIUS.lg,
-  },
-  groupNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  groupName: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.2,
-    flexShrink: 1,
-  },
+  /* Group row */
+  groupRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md, paddingVertical: SPACING.md },
+  groupBody: { flex: 1, gap: 3 },
+  groupNameRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, flexWrap: "wrap" },
+  groupName: { fontSize: 15, fontWeight: "700", color: CLAY.ink, letterSpacing: -0.2, flexShrink: 1 },
   groupMetaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  groupMeta: {
-    fontSize: 11.5,
-    color: CLAY.inkSoft,
-    fontWeight: "500",
-  },
-  groupMetaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: CLAY.inkFaint,
-    opacity: 0.6,
-  },
-  groupUnreadRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  groupUnreadDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: ACCENT.green,
-  },
-  groupUnreadText: {
-    fontSize: 11,
-    color: ACCENT.green,
-    fontWeight: "800",
-  },
+  groupMeta: { fontSize: 12, color: CLAY.inkSoft, fontWeight: "500" },
+  unreadPill: { backgroundColor: ACCENT.greenSoft, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2, marginLeft: SPACING.xs },
+  unreadText: { fontSize: 11, color: ACCENT.green, fontWeight: "700" },
 
-  /* Empty inline (invites) */
-  emptyInlineCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-    padding: SPACING.lg,
-    borderRadius: RADIUS.lg,
-  },
-  emptyInlineIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  emptyInlineTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: CLAY.ink,
-  },
-  emptyInlineBody: {
-    fontSize: 11.5,
-    color: CLAY.inkSoft,
-    marginTop: 2,
-    fontWeight: "500",
-  },
+  /* Invite tile */
+  inviteTile: { backgroundColor: ACCENT.greenSoft, borderRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.lg, marginBottom: SPACING.md },
+  inviteTop: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
+  inviteText: { flex: 1, gap: 2 },
+  inviteName: { fontSize: 15, fontWeight: "700", color: CLAY.ink },
+  inviteMeta: { fontSize: 12, color: CLAY.inkSoft, fontWeight: "500" },
+  inviteTag: { backgroundColor: CLAY.surface, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  inviteTagText: { fontSize: 11, fontWeight: "700", color: ACCENT.green },
+  inviteActions: { flexDirection: "row", gap: SPACING.sm },
+  inviteBtn: { flex: 1, paddingVertical: 12, borderRadius: RADIUS.md, alignItems: "center", justifyContent: "center" },
+  inviteBtnGhost: { backgroundColor: CLAY.surface },
+  inviteBtnPrimary: { backgroundColor: ACCENT.green },
+  inviteBtnGhostText: { color: CLAY.ink, fontWeight: "600", fontSize: 13 },
+  inviteBtnPrimaryText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
-  /* Empty block (my groups) */
-  emptyBlockCard: {
-    padding: SPACING.xl,
-    borderRadius: RADIUS.lg,
-    alignItems: "center",
-    gap: 6,
-  },
-  emptyBlockIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  emptyBlockTitle: {
-    fontSize: 13.5,
-    fontWeight: "800",
-    color: CLAY.ink,
-  },
-  emptyBlockBody: {
-    fontSize: 11.5,
-    color: CLAY.inkSoft,
-    textAlign: "center",
-    lineHeight: 17,
-    maxWidth: 240,
-    fontWeight: "500",
-  },
+  /* Invites empty */
+  emptyInline: { flexDirection: "row", alignItems: "center", gap: SPACING.md, paddingVertical: SPACING.md },
+  emptyInlineIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: ACCENT.navySoft, alignItems: "center", justifyContent: "center" },
+  emptyInlineText: { flex: 1 },
+  emptyInlineTitle: { fontSize: 14, fontWeight: "700", color: CLAY.ink },
+  emptyInlineBody: { fontSize: 12, color: CLAY.inkSoft, marginTop: 2, fontWeight: "500" },
 
-  /* Discover card */
-  discoverCard: {
-    padding: SPACING.lg,
-    borderRadius: 22,
-    gap: SPACING.md,
-    minHeight: 240,
-  },
-  discoverName: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.3,
-    textAlign: "center",
-  },
-  discoverMetaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  discoverMeta: {
-    fontSize: 11.5,
-    color: CLAY.inkSoft,
-    fontWeight: "500",
-  },
-  discoverBody: {
-    fontSize: 12,
-    color: CLAY.inkSoft,
-    lineHeight: 17,
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  discoverActions: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    marginTop: "auto",
-  },
-  discoverGhostBtn: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: CLAY.sunken,
-    flexDirection: "row",
-    gap: 5,
-  },
-  discoverGhostText: {
-    color: CLAY.ink,
-    fontWeight: "800",
-    fontSize: 12,
-  },
-  discoverPrimaryBtn: {
-    paddingVertical: 10,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 5,
-  },
-  discoverPrimaryText: {
-    fontWeight: "800",
-    fontSize: 12,
-  },
+  /* Empty block */
+  emptyBlock: { alignItems: "center", paddingVertical: SPACING.xxl, gap: 6 },
+  emptyIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: ACCENT.greenSoft, alignItems: "center", justifyContent: "center", marginBottom: SPACING.xs },
+  emptyTitle: { fontSize: 15, fontWeight: "700", color: CLAY.ink, textAlign: "center" },
+  emptyBody: { fontSize: 13, color: CLAY.inkSoft, textAlign: "center", lineHeight: 19, maxWidth: 260, fontWeight: "500" },
 
-  /* Swipe hint */
-  swipeHint: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    marginTop: SPACING.sm,
-  },
-  dotsRow: { flexDirection: "row", gap: 5, alignItems: "center" },
-  dot: { height: 6, borderRadius: 3 },
+  /* Discover */
+  emptyRetry: { marginTop: SPACING.md, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md, borderRadius: RADIUS.md, backgroundColor: ACCENT.green },
+  emptyRetryText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
-  /* FAB — `bottom` is now supplied inline so it can sit above the tab bar */
-  fab: {
-    position: "absolute",
-    right: SPACING.xl,
-    borderRadius: 29,
-  },
-  fabBody: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  discoverScroll: { paddingHorizontal: DISCOVER_SIDE_PADDING, gap: DISCOVER_CARD_GAP, paddingVertical: SPACING.sm },
+  discoverTile: { width: DISCOVER_CARD_WIDTH, backgroundColor: CLAY.surface, borderRadius: RADIUS.lg, padding: SPACING.lg, gap: SPACING.md, minHeight: 230 },
+  discoverTop: { alignItems: "center", gap: 10 },
+  discoverName: { fontSize: 16, fontWeight: "700", color: CLAY.ink, letterSpacing: -0.2, textAlign: "center" },
+  discoverBody: { fontSize: 13, color: CLAY.inkSoft, lineHeight: 18, fontWeight: "500", textAlign: "center" },
+  discoverActions: { flexDirection: "row", gap: SPACING.sm, marginTop: "auto" },
+  discoverGhostBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: SPACING.lg, paddingVertical: 12, borderRadius: RADIUS.md, backgroundColor: CLAY.sunken },
+  discoverGhostText: { color: CLAY.ink, fontWeight: "600", fontSize: 13 },
+  discoverPrimaryBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: RADIUS.md },
+  discoverPrimaryText: { fontWeight: "700", fontSize: 13 },
+  joinAsk: { backgroundColor: ACCENT.green },
+  joinAskText: { color: "#fff" },
+  joinPending: { backgroundColor: ACCENT.amberSoft },
+  joinPendingText: { color: ACCENT.amber },
+  joinApproved: { backgroundColor: ACCENT.greenSoft },
+  joinApprovedText: { color: ACCENT.green },
+
+  swipeHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: SPACING.sm },
+  chevronOff: { opacity: 0.35 },
+  dotsRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: CLAY.skeleton },
+  dotActive: { width: 18, backgroundColor: CLAY.inkSoft },
+
+  /* FAB */
+  fab: { position: "absolute", right: SPACING.xl, width: 56, height: 56, borderRadius: 28, backgroundColor: ACCENT.green, alignItems: "center", justifyContent: "center", shadowColor: ACCENT.green, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 },
 
   /* Modals */
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)" },
-  modalSheet: {
-    backgroundColor: CLAY.surface,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: SPACING.xl,
-    paddingBottom: Platform.OS === "ios" ? 40 : 24,
-  },
-  modalHandle: {
-    alignSelf: "center",
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: CLAY.sunken,
-    marginBottom: SPACING.lg,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: SPACING.md,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.3,
-  },
-  modalSubtitle: {
-    fontSize: 13,
-    color: CLAY.inkSoft,
-    marginTop: 2,
-    fontWeight: "500",
-  },
-  modalBody: {
-    color: CLAY.inkSoft,
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: SPACING.md,
-    fontWeight: "500",
-  },
-  joinInput: {
-    borderWidth: 1,
-    borderColor: CLAY.hairline,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    color: CLAY.ink,
-    minHeight: 120,
-    textAlignVertical: "top",
-    fontSize: 14,
-    backgroundColor: CLAY.sunken,
-  },
-  joinInputFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 6,
-    marginBottom: SPACING.lg,
-  },
-  joinInputError: { color: ACCENT.red, fontSize: 12, fontWeight: "600" },
-  joinInputCount: {
-    color: CLAY.inkFaint,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  joinSubmit: {
-    paddingVertical: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  joinSubmitText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 16,
-    letterSpacing: -0.2,
-  },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
+  modalSheet: { backgroundColor: CLAY.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl, padding: SPACING.xl, paddingBottom: Platform.OS === "ios" ? 40 : 24 },
+  messagesSheet: { maxHeight: "80%" },
+  modalHandle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: CLAY.skeleton, marginBottom: SPACING.lg },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: SPACING.md },
+  modalHeaderText: { flex: 1, marginRight: SPACING.md },
+  modalTitleRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm },
+  modalTitle: { fontSize: 18, fontWeight: "700", color: CLAY.ink, letterSpacing: -0.3 },
+  modalSubtitle: { fontSize: 13, color: CLAY.inkSoft, marginTop: 2, fontWeight: "500" },
+  modalBody: { color: CLAY.inkSoft, fontSize: 14, lineHeight: 20, marginBottom: SPACING.md, fontWeight: "500" },
+  joinInput: { borderRadius: RADIUS.md, padding: SPACING.lg, color: CLAY.ink, minHeight: 120, textAlignVertical: "top", fontSize: 15, backgroundColor: CLAY.sunken },
+  joinInputInvalid: { borderWidth: 1, borderColor: ACCENT.red },
+  joinInputFooter: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, marginBottom: SPACING.lg },
+  joinErrorText: { color: ACCENT.red, fontSize: 12, fontWeight: "600" },
+  joinInputCount: { color: CLAY.inkFaint, fontSize: 12, fontWeight: "500" },
+  joinSubmit: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACING.sm, paddingVertical: SPACING.md + 2, borderRadius: RADIUS.md, backgroundColor: ACCENT.green },
+  joinSubmitBusy: { opacity: 0.75 },
+  joinSubmitText: { color: "#fff", fontWeight: "700", fontSize: 15 },
 
-  /* Message modal states */
-  messageState: {
-    padding: 40,
-    alignItems: "center",
-    gap: 12,
-  },
-  messageStateText: {
-    color: CLAY.inkSoft,
-    fontSize: 14,
-    textAlign: "center",
-    fontWeight: "500",
-  },
-  messageEmptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  messageEmptyTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: CLAY.ink,
-    textAlign: "center",
-  },
-  messageEmptyBody: {
-    fontSize: 13,
-    color: CLAY.inkSoft,
-    textAlign: "center",
-    lineHeight: 20,
-    fontWeight: "500",
-  },
-
-  /* Message card */
-  messageCardWrap: { marginBottom: SPACING.md },
-  messageCard: {
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    gap: SPACING.md,
-  },
-  messageTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  messageGroupRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
-  },
-  messageGroupName: {
-    fontSize: 13,
-    color: CLAY.inkSoft,
-    fontWeight: "600",
-  },
-  messageLabel: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: CLAY.ink,
-    letterSpacing: -0.2,
-  },
-  messageStatusIcon: {
-    borderRadius: 20,
-    padding: 8,
-  },
-  messageAdminNote: {
-    backgroundColor: CLAY.sunken,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    borderLeftWidth: 3,
-  },
-  messageAdminLabel: {
-    fontSize: 10.5,
-    color: CLAY.inkSoft,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  messageAdminBody: {
-    fontSize: 14,
-    color: CLAY.ink,
-    lineHeight: 21,
-    fontWeight: "500",
-  },
-  messageInlineNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-  },
-  messageInlineText: {
-    fontSize: 13,
-    fontWeight: "600",
-    flex: 1,
-  },
-  messageTimestamp: {
-    fontSize: 11,
-    color: CLAY.inkFaint,
-    fontWeight: "600",
-  },
+  /* Messages */
+  messageState: { padding: SPACING.huge, alignItems: "center", gap: SPACING.md },
+  messageStateText: { color: CLAY.inkSoft, fontSize: 14, textAlign: "center", fontWeight: "500" },
+  messageStateError: { color: ACCENT.red },
+  messageList: { paddingTop: SPACING.sm, gap: SPACING.xl },
+  messageItem: { gap: SPACING.md },
+  messageTop: { flexDirection: "row", alignItems: "center", gap: SPACING.md },
+  statusIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  statusApproved: { backgroundColor: ACCENT.greenSoft },
+  statusRejected: { backgroundColor: ACCENT.redSoft },
+  statusPending: { backgroundColor: ACCENT.amberSoft },
+  messageTitleWrap: { flex: 1, gap: 2 },
+  messageLabel: { fontSize: 15, fontWeight: "700", color: CLAY.ink },
+  messageGroupName: { fontSize: 13, color: CLAY.inkSoft, fontWeight: "500" },
+  messageAdminNote: { backgroundColor: CLAY.sunken, borderRadius: RADIUS.md, padding: SPACING.md, gap: 4 },
+  messageAdminLabel: { fontSize: 12, color: CLAY.inkSoft, fontWeight: "600" },
+  messageAdminBody: { fontSize: 14, color: CLAY.ink, lineHeight: 20, fontWeight: "500" },
+  messageInlineNote: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, borderRadius: RADIUS.md, padding: SPACING.md },
+  messageInlineText: { fontSize: 13, fontWeight: "600", flex: 1 },
+  noteAmber: { backgroundColor: ACCENT.amberSoft },
+  noteAmberText: { color: ACCENT.amber },
+  noteGreen: { backgroundColor: ACCENT.greenSoft },
+  noteGreenText: { color: ACCENT.green },
+  messageTimestamp: { fontSize: 12, color: CLAY.inkFaint, fontWeight: "500" },
 });

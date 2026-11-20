@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { StyleSheet } from "react-native";
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -15,31 +16,23 @@ interface SkeletonCardProps {
 
 export function SkeletonCard({
   height = 92,
-  rounded = 20,
+  rounded = 14,
   marginHorizontal = 20,
 }: SkeletonCardProps) {
   const pulse = useSharedValue(0);
 
   useEffect(() => {
-    pulse.value = withRepeat(withTiming(1, { duration: 1200 }), -1, true);
+    pulse.value = withRepeat(withTiming(1, { duration: 1100 }), -1, true);
   }, [pulse]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(pulse.value, [0, 1], [0.45, 0.85]),
+    opacity: interpolate(pulse.value, [0, 1], [0.5, 1]),
   }));
 
-  return (
-    <Animated.View
-      style={[
-        {
-          height,
-          borderRadius: rounded,
-          backgroundColor: "rgba(120,120,120,0.15)",
-          marginHorizontal,
-          marginBottom: 12,
-        },
-        animatedStyle,
-      ]}
-    />
-  );
+  // height / rounded / marginHorizontal are props, so they stay dynamic
+  return <Animated.View style={[styles.block, { height, borderRadius: rounded, marginHorizontal }, animatedStyle]} />;
 }
+
+const styles = StyleSheet.create({
+  block: { backgroundColor: "#E2E8F0", marginBottom: 12 },
+});

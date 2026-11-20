@@ -1,46 +1,39 @@
-// Wraps any icon and overlays a red badge dot or count bubble.
+// Wraps any icon and overlays a count bubble.
 
 import React from "react";
-import { View, Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 type Props = {
-    count: number;
-    children: React.ReactNode;
+  count: number;
+  children: React.ReactNode;
 };
 
 export function NotificationBadge({ count, children }: Props) {
-    return (
-        <View style={{ position: "relative" }}>
-            {children}
-            {count > 0 && (
-                <View
-                    style={{
-                        position: "absolute",
-                        top: -5,
-                        right: -6,
-                        backgroundColor: "#ef4444",
-                        borderRadius: 10,
-                        minWidth: 18,
-                        height: 18,
-                        justifyContent: "center",
-                        alignItems: "center",
-                        paddingHorizontal: 4,
-                        borderWidth: 1.5,
-                        borderColor: "#fff",
-                    }}
-                >
-                    <Text
-                        style={{
-                            color: "#fff",
-                            fontSize: 10,
-                            fontWeight: "700",
-                            lineHeight: 12,
-                        }}
-                    >
-                        {count > 99 ? "99+" : count}
-                    </Text>
-                </View>
-            )}
+  return (
+    <View style={styles.wrap}>
+      {children}
+      {count > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.text}>{count > 99 ? "99+" : count}</Text>
         </View>
-    );
+      )}
+    </View>
+  );
 }
+
+const styles = StyleSheet.create({
+  wrap: { position: "relative" },
+  badge: {
+    position: "absolute",
+    top: -6,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: "#CF6B6B",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  text: { color: "#fff", fontSize: 10, fontWeight: "700", lineHeight: 12 },
+});
